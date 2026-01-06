@@ -4,7 +4,10 @@ import random
 from src.data_manager import MovieLensDataManager
 from src.trainer import RecSysTrainer
 from src.models import NeuralMF
+from tqdm import tqdm
 import matplotlib.pyplot as plt
+from pathlib import Path
+
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -16,24 +19,18 @@ def set_seed(seed=42):
 
 
 
-
-
-
 if __name__ == "__main__":
     set_seed(42)
 
-    data_manager = MovieLensDataManager("nmf")
-    model = NeuralMF(num_users=data_manager.num_users, num_items=data_manager.num_items, latent_space_size=256)
+    model_type = "nmf"
+    data_manager = MovieLensDataManager(model_type)
+    model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=4, latent_mlp=32)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.BCEWithLogitsLoss()
     trainer = RecSysTrainer(model, optimizer, criterion)
+    
+    trainer.load_state_dict(path=Path("trained_models") / Path("best_nmf_model.pth"))
 
-    epochs = 10
-    train_losses = []
-    valid_losses = []
-    for epoch in range(epochs):
-        train_losses.append(trainer.train_epoch(data_manager.train_loader, data_manager.num_items))
-        valid_losses.append(trainer.evaluate(data_manager.valid_loader))
-
-    plt.plot(range(epochs), train_losses, label="Train")
-    plt.show()
+    hit_rate, ndcg = trainer.evaluate(data_manager.valid_loader, k=5)
+    print(hit_rate)
+    print(ndcg)

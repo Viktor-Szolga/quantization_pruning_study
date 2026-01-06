@@ -53,7 +53,7 @@ class NeuralCF(nn.Module):
     
 
 
-class NeurfalMF(nn.Module):
+class NeuralMF(nn.Module):
     def __init__(self, num_users, num_items, latent_mf, latent_mlp, hidden_sizes=[256, 128, 64]):
         super().__init__()
         self.user_embedding_mf = nn.Embedding(num_users, latent_mf)
@@ -62,7 +62,7 @@ class NeurfalMF(nn.Module):
         self.item_embedding_mlp = nn.Embedding(num_items, latent_mlp)
 
         self.mlp = MLP(latent_mlp*2, hidden_sizes)
-        self.prediction_layer = nn.Linear(hidden_sizes[-1], 1)
+        self.prediction_layer = nn.Linear(hidden_sizes[-1] + latent_mf, 1)
         self.sigmoid = nn.Sigmoid()
         self._init_weights()
 
@@ -95,3 +95,29 @@ class NeurfalMF(nn.Module):
         logits = self.prediction_layer(torch.cat([vector_mf, out], dim=-1))
         score = self.sigmoid(logits)
         return score
+    
+
+
+class Bert4Rec(nn.Module):
+    def __init__(self, item_num, hidden_size, num_layers, num_heads, max_sequence_length, dropout=0.1):
+        super().__init__()
+        self.item_embedding = nn.Embedding(item_num + 2, hidden_size, padding_idx=0)
+        self.position_embedding = nn.Embedding(max_sequence_length, hidden_size)
+
+        self.layer_norm = nn.LayerNorm(hidden_size, eps=1e-12)
+        self.dropout = nn.Dropout(dropout)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_size, nhead=num_heads, batch_first=True, dim_feedforward=hidden_size * 4, dropout=dropout, activation="gelu"
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.output_layer = nn.Linear(hidden_size, item_num + 2)
+
+    def forward(self, x):
+        mask = (x == 0)
+        positions = torch.arange(x.size(1), device=x.device).unsqueeze(0)
+        x = self.item_embedding(x) + self.position_embedding(positions)
+        x = self.layer_norm(x)
+        x = self.dropout(x)
+        x = self.encoder(x, src_key_padding_mask=mask)
+        return self.output_layer(x)

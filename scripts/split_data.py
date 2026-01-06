@@ -35,6 +35,7 @@ full_ratings = pd.read_csv(
 
 # LOO
 sorted_ratings = full_ratings.sort_values(by=["UserID", "Timestamp"], ascending=True)
+
 item_rank = sorted_ratings.groupby("UserID").cumcount(ascending=False)
 test_df = sorted_ratings[item_rank == 0].copy()
 valid_df = sorted_ratings[item_rank == 1].copy()
@@ -51,13 +52,45 @@ nmf_test  = test_df[["UserID", "MovieID", "Rating"]].to_numpy()
 with open(BASE_DIR / "data" / "processed" / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
 
-bert_train_sequences = train_df.groupby("UserID")["MovieID"].apply(list).to_dict()
+
+
+
+user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
+
+bert_train_sequences = {}
+bert_valid_sequences = {}
+bert_test_sequences = {}
+
+for user_id, items in user_history.items():
+    if len(items) < 3: # Need at least 3 items for Train/Valid/Test LOO
+        continue
+        
+    # Train: All items except the last two
+    bert_train_sequences[user_id-1] = {
+        "seq": items[:-2]
+    }
+    
+    # Valid: Input is train items, Target is the second to last item
+    # We save both so the Dataset knows what to mask and what to check
+    bert_valid_sequences[user_id-1] = {
+        "seq": items[:-2], 
+        "target": items[-2]
+    }
+    
+    # Test: Input is train + valid items, Target is the very last item
+    bert_test_sequences[user_id-1] = {
+        "seq": items[:-1], 
+        "target": items[-1]
+    }
+#bert_train_sequences = train_df.groupby("UserID")["MovieID"].apply(list).to_dict()
 with open(BASE_DIR / "data" / "processed" / "bert" / "train.pkl", "wb") as f:
     pickle.dump(bert_train_sequences, f)
-bert_valid_targets = valid_df.set_index("UserID")["MovieID"].to_dict()
+#bert_valid_targets = valid_df.set_index("UserID")["MovieID"].to_dict()
 with open(BASE_DIR / "data" / "processed" / "bert" / "valid.pkl", "wb") as f:
-    pickle.dump(bert_valid_targets, f)
-bert_test_targets  = test_df.set_index("UserID")["MovieID"].to_dict()
+    pickle.dump(bert_valid_sequences, f)
+#bert_test_targets  = test_df.set_index("UserID")["MovieID"].to_dict()
 with open(BASE_DIR / "data" / "processed" / "bert" / "test.pkl", "wb") as f:
-    pickle.dump(bert_test_targets, f)
+    pickle.dump(bert_test_sequences, f)
+
+
 
