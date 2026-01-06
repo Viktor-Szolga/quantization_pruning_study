@@ -10,3 +10,4 @@ model_int8 = torch.quantization.quantize_dynamic(
     {nn.Linear, nn.Embedding}, # Specify layers to quantize
     dtype=torch.qint8
 )
+#test
