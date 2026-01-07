@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-
+import bitsandbytes as bnb
 
 class MLP(nn.Module):
     def __init__(self, input_size, hidden_sizes=[256, 128, 64]):
@@ -112,7 +112,7 @@ class Bert4Rec(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.output_layer = nn.Linear(hidden_size, item_num + 2)
-        self.output_layer.weight = self.item_embedding.weight
+        
         self.apply(self._init_weights)
         self.item_embedding.weight.data[0].fill_(0)
 
@@ -134,3 +134,33 @@ class Bert4Rec(nn.Module):
         x = self.dropout(x)
         x = self.encoder(x, src_key_padding_mask=mask)
         return self.output_layer(x)
+
+
+    def set_precision(self, dtype="int8"):
+        import bitsandbytes as bnb
+        
+        # We will only target the large embedding for this test
+        W = self.item_embedding.weight.data.detach().clone().cuda()
+        
+        if dtype == "int8":
+            # Force quantization immediately
+            # This converts the float32 tensor into a packed 8-bit representation
+            out_int8, state = bnb.functional.quantize_blockwise(W)
+            
+            param = bnb.nn.Int8Params(out_int8, requires_grad=False)
+            param.quant_state = state # Attach the quantization metadata
+            self.item_embedding.weight = param.to("cuda")   
+            
+        elif dtype in ["nf4", "fp4"]:
+            # 4-bit usually does this more automatically, but we ensure it here
+            from bitsandbytes.nn import Params4bit
+            param = Params4bit(W, requires_grad=False, quant_type=dtype)
+            self.item_embedding.weight = param.to("cuda")
+            
+        elif dtype == "fp16":
+            self.item_embedding.half()
+
+        # CRITICAL: Clear cache so we can see the freed FP32 memory
+        torch.cuda.empty_cache()
+
+
