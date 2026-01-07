@@ -220,7 +220,7 @@ class RecSysTrainer:
                         else:
                             hit_rate.append(0)
                             ndcg.append(0)
-                    return 0, 0
+                    #return 0, 0
             return np.mean(hit_rate), np.mean(ndcg)
     
     def report_model_size(self):
