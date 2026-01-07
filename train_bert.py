@@ -37,7 +37,7 @@ if __name__ == "__main__":
                             )
     
     num_training_steps = epochs * len(data_manager.train_loader)
-    num_training_steps = 100000
+    num_training_steps = 5001
     num_warmup_steps = int(0.1 * num_training_steps)
     scheduler = get_linear_schedule_with_warmup(
                                             optimizer,
