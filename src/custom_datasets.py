@@ -25,7 +25,7 @@ class NMFDatset(Dataset):
 
 
 class BERTDataset(Dataset):
-    def __init__(self, data, max_len=50, num_items=3706, mask_prob=0.15, mode='train'):
+    def __init__(self, data, max_len=200, num_items=3706, mask_prob=0.2, mode='train'):
         """
         data: List of dicts like [{'seq': [...], 'target': 1907}, ...]
         mode: 'train', 'valid', or 'test'

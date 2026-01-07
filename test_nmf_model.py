@@ -27,10 +27,10 @@ if __name__ == "__main__":
     model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=4, latent_mlp=32)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.BCEWithLogitsLoss()
+    model.load_state_dict(torch.load("testing/best_nmf_model.pth", map_location="cuda"))
     trainer = RecSysTrainer(model, optimizer, criterion)
     
-    trainer.load_state_dict(path=Path("trained_models") / Path("best_nmf_model.pth"))
 
-    hit_rate, ndcg = trainer.evaluate(data_manager.valid_loader, k=5)
+    hit_rate, ndcg = trainer.evaluate(data_manager.valid_loader)
     print(hit_rate)
     print(ndcg)

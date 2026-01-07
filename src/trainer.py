@@ -2,13 +2,16 @@ import torch
 import numpy as np
 from sklearn.metrics import ndcg_score
 from src.models import Bert4Rec, NeuralMF
+from tqdm import tqdm
+from pathlib import Path
+
 class RecSysTrainer:
-    def __init__(self, model, optimizer, criterion, device="cpu"):#device="cuda" if torch.cuda.is_available else "cpu"):
+    def __init__(self, model, optimizer, criterion, device="cpu", scheduler=None):
         self.model = model.to(device)
         self.optimizer = optimizer
         self.criterion = criterion
         self.device = device
-
+        self.scheduler = scheduler
 
     def load_state_dict(self, path):
         self.model.load_state_dict(torch.load(path, weights_only=True))
@@ -76,11 +79,67 @@ class RecSysTrainer:
                 
                 loss.backward()
                 self.optimizer.step()
+                if self.scheduler:
+                    self.scheduler.step()
                 
                 total_loss += loss.item()
                 
             return total_loss / len(loader)
     
+    def train_n_steps(self, train_loader, validation_loader, max_steps, validation_interval=1000, k=10):
+        if isinstance(self.model, Bert4Rec):
+            self.model.train()
+            train_losses = []
+            val_hr = []
+            val_ndcg = []
+            eval_at = []
+            train_iter = iter(train_loader)
+            best_ndcg = float("-inf")
+            for i in tqdm(range(max_steps), desc="Training", total=max_steps):
+                try:
+                    batch = next(train_iter)
+                except StopIteration:
+                    train_iter = iter(train_loader)
+                    batch = next(train_iter)
+
+                # tokens: the sequence with [MASK] tokens (shape: batch_size, max_len)
+                # labels: the ground truth item IDs only for the masked positions, else 0
+                tokens, labels = [b.to(self.device) for b in batch]
+
+                self.optimizer.zero_grad()
+                
+                # Forward pass: logits shape [batch_size, max_len, num_items + 2]
+                logits = self.model(tokens)
+                
+                # We only want to calculate loss for the positions that were actually masked.
+                # labels == 0 are unmasked positions or padding.
+                # CrossEntropyLoss 'ignore_index=0' handles this automatically.
+                
+                # Reshape for CrossEntropyLoss: (N, C, L) or flatten to (N*L, C)
+                # logits.view(-1, logits.size(-1)) -> [batch_size * max_len, num_items + 2]
+                # labels.view(-1) -> [batch_size * max_len]
+                loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+                
+                loss.backward()
+                self.optimizer.step()
+                if self.scheduler:
+                    self.scheduler.step()
+                
+                train_losses.append(loss.item())
+
+                if i > 0 and i % validation_interval == 0:
+                    hr, ndcg = self.evaluate(loader=validation_loader)
+                    if ndcg > best_ndcg:
+                        best_ndcg = ndcg
+                        save_path = Path("trained_models") / f"best_bert_model_num_steps.pth"
+                        torch.save(self.model.state_dict(), str(save_path))
+                    val_hr.append(hr)
+                    val_ndcg.append(ndcg)
+                    eval_at.append(i)
+                    self.model.train()
+                
+            return train_losses, val_hr, val_ndcg, eval_at
+        
     def evaluate(self, loader, k=10):
         if isinstance(self.model, NeuralMF):
             self.model.eval()
@@ -117,7 +176,7 @@ class RecSysTrainer:
                     
             return np.mean(hr_list), np.mean(ndcg_list)
         
-        if isinstance(self.model, Bert4Rec):
+        else:
             self.model.eval()
             hit_rate = []
             ndcg = []

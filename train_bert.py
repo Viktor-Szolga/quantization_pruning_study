@@ -7,6 +7,8 @@ from src.models import Bert4Rec
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pathlib import Path
+from transformers import get_linear_schedule_with_warmup
+
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -19,37 +21,46 @@ def set_seed(seed=42):
 
 if __name__ == "__main__":
     set_seed(42)
-
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    epochs = 300
+    
+    print(f"Running on {device}")
     model_type = "bert"
     data_manager = MovieLensDataManager(model_type)
-    model = Bert4Rec(item_num=data_manager.num_items, hidden_size=64, num_layers=2, num_heads=2, max_sequence_length=data_manager.train_set.max_len)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    model = Bert4Rec(item_num=data_manager.num_items, hidden_size=256, num_layers=2, num_heads=8,
+                    max_sequence_length=data_manager.train_set.max_len, dropout=0.2
+                )
+    optimizer = torch.optim.AdamW(
+                                model.parameters(),
+                                lr=1e-4,
+                                weight_decay=0.01
+                            )
+    
+    num_training_steps = epochs * len(data_manager.train_loader)
+    num_training_steps = 100000
+    num_warmup_steps = int(0.1 * num_training_steps)
+    scheduler = get_linear_schedule_with_warmup(
+                                            optimizer,
+                                            num_warmup_steps=num_warmup_steps,
+                                            num_training_steps=num_training_steps
+                                        )
     criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
-    trainer = RecSysTrainer(model, optimizer, criterion)
-    epochs = 100
+    trainer = RecSysTrainer(model, optimizer, criterion, device=device, scheduler=scheduler)
+    
     train_losses = []
     ndcg_list = []
     hit_list = []
     
-    best_ndcg = float("-inf")
-    for epoch in tqdm(range(epochs), desc="Training", total=epochs):
-        train_losses.append(trainer.train_epoch(data_manager.train_loader, data_manager.num_items))
-        hr, ndcg = trainer.evaluate(data_manager.valid_loader)
-        ndcg_list.append(ndcg)
-        hit_list.append(hr)
-        if ndcg > best_ndcg:
-            best_ndcg = ndcg
-            save_path = Path("trained_models") / f"best_{model_type}_model.pth"
-            torch.save(model.state_dict(), str(save_path))
+    train_losses, ndcg_list, hit_list, eval_at = trainer.train_n_steps(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps)
 
-    plt.plot(range(epochs), train_losses, label="Train")
+    plt.plot(range(num_training_steps), train_losses, label="Train")
     plt.title("Train loss")
     plt.show()
 
-    plt.plot(range(epochs), hit_list, label="Train")
+    plt.plot(eval_at, hit_list, label="Valid HR")
     plt.title("Hr")
     plt.show()
 
-    plt.plot(range(epochs), ndcg_list, label="Train")
+    plt.plot(eval_at, ndcg_list, label="Valid NDCG")
     plt.title("NDCG")
     plt.show()
