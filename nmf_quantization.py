@@ -8,6 +8,11 @@ import torch.nn as nn
 import os
 import torch.nn.utils.prune as prune
 import gc
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message="Embedding size .* is not divisible by block size"
+)
     
 # Note: You may need to run: pip install bitsandbytes
 try:

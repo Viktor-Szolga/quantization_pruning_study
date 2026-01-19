@@ -47,8 +47,8 @@ class MovieLensDataManager:
                 self.test_set = NMFDatset(self.test_data, all_item_ids=np.arange(1, self.num_items+1), num_negatives=99)
             case "BERT":
                 self.train_set = BERTDataset(self.train_data, mode="train")
-                self.valid_set = BERTDataset(self.valid_data, mode="valid")
-                self.test_set = BERTDataset(self.test_data, mode="test")
+                self.valid_set = BERTDataset(self.valid_data, all_item_ids=np.arange(1, self.num_items+1), mode="valid", num_negatives=99)
+                self.test_set = BERTDataset(self.test_data, all_item_ids=np.arange(1, self.num_items+1), mode="test", num_negatives=99)
 
         self.train_loader = DataLoader(self.train_set, batch_size=256, shuffle=True)
         self.valid_loader = DataLoader(self.valid_set, batch_size=256, shuffle=False)
