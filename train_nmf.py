@@ -23,12 +23,13 @@ if __name__ == "__main__":
 
     model_type = "nmf"
     data_manager = MovieLensDataManager(model_type)
-    model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=4, latent_mlp=32)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=32, latent_mlp=512, hidden_sizes=[512, 256, 128, 64])
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.01)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(device)
     criterion = torch.nn.BCELoss()
     trainer = RecSysTrainer(model, optimizer, criterion, device=device)
-    epochs = 500
+    epochs = 50
     train_losses = []
     ndcg_list = []
     hit_list = []

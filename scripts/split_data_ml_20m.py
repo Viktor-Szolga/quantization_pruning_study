@@ -68,7 +68,7 @@ full_ratings = filter_min_interactions(
     min_item=MIN_INTERACTIONS
 )
 
-print("After filtering (<5 removed):")
+print(f"After filtering (<{MIN_INTERACTIONS} removed):")
 print("Users:", full_ratings["UserID"].nunique())
 print("Items:", full_ratings["MovieID"].nunique())
 print("Interactions:", len(full_ratings))
