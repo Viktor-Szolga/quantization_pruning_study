@@ -66,13 +66,17 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
 def get_quantized_embeddings(embedding, device = "cuda" if torch.cuda.is_available() else "cpu"):
     quantized = []
     embedding_half = copy.deepcopy(embedding).half()
-    module_4_bit = Embedding4bit(embedding.weight.shape[0], embedding.weight.shape[1])
+    module_4_bit = Embedding4bit(embedding.weight.shape[0], embedding.weight.shape[1], quant_type="fp4")
     module_4_bit.load_state_dict(embedding.state_dict())
+
+    
+    module_4_bit_nf = Embedding4bit(embedding.weight.shape[0], embedding.weight.shape[1], quant_type="nf4")
+    module_4_bit_nf.load_state_dict(embedding.state_dict())
 
     module_8_bit = Embedding8bit(embedding.weight.shape[0], embedding.weight.shape[1])
     module_8_bit.load_state_dict(embedding.state_dict())
 
-    quantized = [embedding, embedding_half, module_8_bit, module_4_bit]
+    quantized = [embedding, embedding_half, module_8_bit, module_4_bit, module_4_bit_nf]
     return quantized
 
 

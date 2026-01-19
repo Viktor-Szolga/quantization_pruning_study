@@ -72,13 +72,16 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
 def get_quantized_embeddings(embedding, device = "cuda" if torch.cuda.is_available() else "cpu"):
     quantized = []
     embedding_half = copy.deepcopy(embedding).half()
-    module_4_bit = Embedding4bit(embedding.weight.shape[0], embedding.weight.shape[1])
+    module_4_bit = Embedding4bit(embedding.weight.shape[0], embedding.weight.shape[1], quant_type="fp4")
     module_4_bit.load_state_dict(embedding.state_dict())
+    
+    module_4_bit_nf = Embedding4bit(embedding.weight.shape[0], embedding.weight.shape[1], quant_type="nf4")
+    module_4_bit_nf.load_state_dict(embedding.state_dict())
 
     module_8_bit = Embedding8bit(embedding.weight.shape[0], embedding.weight.shape[1])
     module_8_bit.load_state_dict(embedding.state_dict())
 
-    quantized = [embedding, embedding_half, module_8_bit, module_4_bit]
+    quantized = [embedding, embedding_half, module_8_bit, module_4_bit, module_4_bit_nf]
     return quantized
 
 
@@ -99,8 +102,8 @@ if __name__ == "__main__":
         dm = MovieLensDataManager("nmf")
         model = NeuralMF(num_users=dm.num_users+1, num_items=dm.num_items+1, latent_mf=4, latent_mlp=32)
         
-        if os.path.exists("testing/best_nmf_model.pth"):
-            model.load_state_dict(torch.load("testing/best_nmf_model.pth", map_location="cuda"))
+        if os.path.exists("testing/best_nmf_model copy.pth"):
+            model.load_state_dict(torch.load("testing/best_nmf_model copy.pth", map_location="cuda"))
         
         embeddings = [model.item_embedding_mf, model.item_embedding_mlp, model.user_embedding_mf, model.user_embedding_mlp]
         pruned_embeddings=[]
@@ -118,7 +121,7 @@ if __name__ == "__main__":
         models = get_model_variants(model, quantized_embeddings, ["item_embedding_mf", "item_embedding_mlp", "user_embedding_mf", "user_embedding_mlp"])
 
         for m, test_embedding in zip(models, test_embeddings):
-            m.test_embedding = test_embedding
+            #m.test_embedding = test_embedding
             evaluate_model(m, dm)
             m.to("cpu")
 
