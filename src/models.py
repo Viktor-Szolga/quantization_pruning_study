@@ -139,12 +139,9 @@ class Bert4Rec(nn.Module):
     def set_precision(self, dtype="int8"):
         import bitsandbytes as bnb
         
-        # We will only target the large embedding for this test
         W = self.item_embedding.weight.data.detach().clone().cuda()
         
         if dtype == "int8":
-            # Force quantization immediately
-            # This converts the float32 tensor into a packed 8-bit representation
             out_int8, state = bnb.functional.quantize_blockwise(W)
             
             param = bnb.nn.Int8Params(out_int8, requires_grad=False)
