@@ -60,8 +60,7 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
     print(f"Number of neurons in embedding: {m.item_embedding.weight.numel()}")
     trainer = RecSysTrainer(model, None, None, device)
     with torch.amp.autocast("cuda"):
-        #hr, ndcg = trainer.evaluate(dm.valid_loader)
-        hr, ndcg = trainer.evaluate_bert_fair(dm.valid_loader)
+        hr, ndcg = trainer.evaluate(dm.valid_loader)
         
     print(model.item_embedding.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")

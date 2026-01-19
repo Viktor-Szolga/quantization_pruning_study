@@ -51,7 +51,7 @@ if __name__ == "__main__":
     ndcg_list = []
     hit_list = []
     
-    train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps)
+    train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps)
 
     plt.plot(range(num_training_steps), train_losses, label="Train")
     plt.title("Train loss")

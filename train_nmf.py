@@ -17,7 +17,6 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-
 if __name__ == "__main__":
     set_seed(42)
 

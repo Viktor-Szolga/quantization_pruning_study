@@ -60,29 +60,16 @@ class BERTDataset(Dataset):
 
             items = torch.LongTensor([target] + neg_items.tolist())
 
-            # append MASK
+            # append mask
             tokens = seq + [self.mask_token]
             tokens = tokens[-self.max_len:]
             padding_len = self.max_len - len(tokens)
-            tokens = tokens + [0] * padding_len   # right padding
+            tokens = tokens + [0] * padding_len
 
             return torch.LongTensor(tokens), items
-            # For LOO evaluation: 
-            # 1. Take the sequence
-            # 2. Append [MASK] at the end
-            # 3. Target is the 'target' field from your data
-            tokens = seq + [self.mask_token]
-            tokens = tokens[-self.max_len:]
-            
-            padding_len = self.max_len - len(tokens)
-            tokens = [0] * padding_len + tokens
-            
-            # The label is the target item ID
-            target = item.get('target', 0)
-            return torch.LongTensor(tokens), torch.LongTensor([target])
 
         else:
-            # Training Mode: Cloze Task (Random Masking)
+            # Cloze training
             seq = seq[-self.max_len:]
             tokens, labels = [], []
 
@@ -96,12 +83,11 @@ class BERTDataset(Dataset):
                         tokens.append(random.randint(1, self.num_items))
                     else:
                         tokens.append(s)
-                    labels.append(s) # Predict the original item
+                    labels.append(s)
                 else:
                     tokens.append(s)
-                    labels.append(0) # 0 means ignore in Loss Function
+                    labels.append(0)
 
-            # Padding
             padding_len = self.max_len - len(tokens)
             tokens = [0] * padding_len + tokens
             labels = [0] * padding_len + labels
