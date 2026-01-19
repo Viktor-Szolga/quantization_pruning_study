@@ -25,7 +25,7 @@ class NMFDatset(Dataset):
 
 
 class BERTDataset(Dataset):
-    def __init__(self, data, max_len=200, num_items=3706, mask_prob=0.2, mode='train'):
+    def __init__(self, data, max_len=200, num_items=3706, mask_prob=0.2, mode='train', all_item_ids=None, num_negatives=0):
         """
         data: List of dicts like [{'seq': [...], 'target': 1907}, ...]
         mode: 'train', 'valid', or 'test'
@@ -36,6 +36,8 @@ class BERTDataset(Dataset):
         self.mask_token = num_items + 1  # Standard Bert4Rec: item_num + 1
         self.mask_prob = mask_prob
         self.mode = mode
+        self.all_item_ids = all_item_ids
+        self.num_negatives = num_negatives
 
     def __len__(self):
         return len(self.data)
@@ -45,6 +47,26 @@ class BERTDataset(Dataset):
         seq = item['seq']
         
         if self.mode in ['valid', 'test']:
+            item = self.data[idx]
+            seq = item["seq"]
+            target = item["target"]
+
+            # sample negatives
+            neg_items = np.random.choice(
+                self.all_item_ids,
+                self.num_negatives,
+                replace=False
+            )
+
+            items = torch.LongTensor([target] + neg_items.tolist())
+
+            # append MASK
+            tokens = seq + [self.mask_token]
+            tokens = tokens[-self.max_len:]
+            padding_len = self.max_len - len(tokens)
+            tokens = tokens + [0] * padding_len   # right padding
+
+            return torch.LongTensor(tokens), items
             # For LOO evaluation: 
             # 1. Take the sequence
             # 2. Append [MASK] at the end
@@ -85,3 +107,4 @@ class BERTDataset(Dataset):
             labels = [0] * padding_len + labels
             
             return torch.LongTensor(tokens), torch.LongTensor(labels)
+        

@@ -229,3 +229,45 @@ class RecSysTrainer:
         size_all_mb = (param_size + buffer_size) / 1024**2
         print(f"Model Size: {size_all_mb:.2f} MB")
         return size_all_mb
+    
+
+    def evaluate_bert_fair(self, loader, k=10):
+        self.model.eval()
+        hr_list = []
+        ndcg_list = []
+
+        with torch.no_grad():
+            for batch in loader:
+                # seq: [B, max_len]
+                # items: [B, 1 + num_negatives]
+                seq, items = [b.to(self.device) for b in batch]
+
+                batch_size, num_candidates = items.shape
+                current_k = min(k, num_candidates)
+
+                # 1. Forward pass
+                # logits: [B, max_len, vocab_size]
+                logits = self.model(seq)
+
+                # 2. Take prediction at last position
+                scores_full = logits[:, -1, :]  # [B, vocab_size]
+
+                # 3. Gather only candidate item scores
+                # scores: [B, num_candidates]
+                scores = scores_full.gather(1, items)
+
+                # 4. Rank candidates
+                _, indices = torch.topk(scores, k=current_k, dim=1)
+
+                # 5. Compute HR / NDCG
+                for i in range(batch_size):
+                    # positive item is always at index 0
+                    if 0 in indices[i]:
+                        hr_list.append(1.0)
+                        rank = (indices[i] == 0).nonzero(as_tuple=True)[0].item()
+                        ndcg_list.append(1.0 / np.log2(rank + 2))
+                    else:
+                        hr_list.append(0.0)
+                        ndcg_list.append(0.0)
+
+        return np.mean(hr_list), np.mean(ndcg_list)
