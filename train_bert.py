@@ -26,18 +26,18 @@ if __name__ == "__main__":
     
     print(f"Running on {device}")
     model_type = "bert"
-    data_manager = MovieLensDataManager(model_type)
+    data_manager = MovieLensDataManager(model_type, dataset="ml-1m")
     model = Bert4Rec(item_num=data_manager.num_items, hidden_size=256, num_layers=2, num_heads=8,
                     max_sequence_length=data_manager.train_set.max_len, dropout=0.2
                 )
     optimizer = torch.optim.AdamW(
                                 model.parameters(),
-                                lr=1e-4,
+                                lr=1e-3,
                                 weight_decay=0.01
                             )
     
     num_training_steps = epochs * len(data_manager.train_loader)
-    num_training_steps = 5001
+    num_training_steps = 100001
     num_warmup_steps = int(0.1 * num_training_steps)
     scheduler = get_linear_schedule_with_warmup(
                                             optimizer,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     ndcg_list = []
     hit_list = []
     
-    train_losses, ndcg_list, hit_list, eval_at = trainer.train_n_steps(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps)
+    train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps)
 
     plt.plot(range(num_training_steps), train_losses, label="Train")
     plt.title("Train loss")

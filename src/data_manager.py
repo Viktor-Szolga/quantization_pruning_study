@@ -39,7 +39,7 @@ class MovieLensDataManager:
                             )["UserID"].max()
         if dataset == "ml-20m":
             self.num_users = 138493
-            self.num_items = 18345
+            self.num_items = 18345   # Has to be changed manually atm
         match model_type.upper():
             case "NMF":
                 self.train_set = NMFDatset(self.train_data)

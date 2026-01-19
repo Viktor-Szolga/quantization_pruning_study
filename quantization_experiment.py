@@ -5,6 +5,7 @@ import gc
 from src.models import Bert4Rec
 from src.data_manager import MovieLensDataManager
 from src.trainer import RecSysTrainer
+from pathlib import Path
 
 def get_model_size_vram(model):
     """
@@ -31,7 +32,7 @@ def get_model_size_vram(model):
 def run_experiment():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model_type = "bert"
-    data_manager = MovieLensDataManager(model_type, dataset="ml-20m")
+    data_manager = MovieLensDataManager(model_type, dataset="ml-1m")
     
     precisions = ["fp32", "fp16", "int8", "nf4"]
     results = {}
@@ -54,6 +55,8 @@ def run_experiment():
             max_sequence_length=data_manager.train_set.max_len, 
             dropout=0.2
         ).to(device)
+        
+        model.load_state_dict(torch.load(Path("trained_models") / Path("best_bert_model_num_steps.pth")))
 
         # 3. Apply Quantization
         model.set_precision(precision)

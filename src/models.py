@@ -163,4 +163,75 @@ class Bert4Rec(nn.Module):
         # CRITICAL: Clear cache so we can see the freed FP32 memory
         torch.cuda.empty_cache()
 
+    def set_precision(self, dtype="int8"):
+            import bitsandbytes as bnb
+            
+            # 1. Quantize Item Embedding (Your existing logic)
+            # Note: Ideally, you should also replace nn.Embedding with bnb.nn.Embedding for stability,
+            # but we will keep your manual parameter logic here as requested.
+            W_emb = self.item_embedding.weight.data.detach().clone().cuda().half()
+            
+            if dtype == "int8":
+                out_int8, state = bnb.functional.quantize_blockwise(W_emb)
+                param = bnb.nn.Int8Params(out_int8, requires_grad=False)
+                param.quant_state = state
+                self.item_embedding.weight = param.to("cuda")
+                
+            elif dtype in ["nf4", "fp4"]:
+                from bitsandbytes.nn import Params4bit
+                param = Params4bit(W_emb, requires_grad=False, quant_type=dtype)
+                self.item_embedding.weight = param.to("cuda")
+                
+            elif dtype == "fp16":
+                self.item_embedding.half()
+
+            # 2. Quantize Output Layer (New Logic)
+            # We must replace the entire nn.Linear module with a bnb module
+            W_out = self.output_layer.weight.data.detach().clone().cuda().half()
+            B_out = None
+            if self.output_layer.bias is not None:
+                B_out = self.output_layer.bias.data.detach().clone().cuda().half()
+
+            if dtype == "int8":
+                from bitsandbytes.nn import Linear8bitLt
+                # Create the 8-bit layer
+                new_linear = Linear8bitLt(
+                    self.output_layer.in_features,
+                    self.output_layer.out_features,
+                    bias=(B_out is not None),
+                    has_fp16_weights=False, # We want pure Int8 weights
+                    threshold=6.0 
+                )
+                # Load weights and force quantization by moving to CUDA
+                new_linear.weight.data = W_out
+                if B_out is not None:
+                    new_linear.bias.data = B_out
+                
+                self.output_layer = new_linear.cuda()
+
+            elif dtype in ["nf4", "fp4"]:
+                from bitsandbytes.nn import Linear4bit
+                # Create the 4-bit layer
+                new_linear = Linear4bit(
+                    self.output_layer.in_features,
+                    self.output_layer.out_features,
+                    bias=(B_out is not None),
+                    quant_type=dtype,
+                    compute_dtype=torch.float16 # 4-bit uses fp16/bf16 for computation
+                )
+                # Load weights
+                new_linear.weight.data = W_out
+                if B_out is not None:
+                    new_linear.bias.data = B_out
+                    
+                self.output_layer = new_linear.cuda()
+
+            elif dtype == "fp16":
+                self.output_layer.half()
+
+            # CRITICAL: Clear cache to reclaim the FP32 memory
+            del W_emb, W_out
+            if 'B_out' in locals() and B_out is not None:
+                del B_out
+            torch.cuda.empty_cache()
 
