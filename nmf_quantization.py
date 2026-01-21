@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import copy
 import time
-from bitsandbytes.nn import Embedding4bit, Embedding8bit, Linear4bit
+from bitsandbytes.nn import Embedding4bit, Embedding8bit
 import copy
 import torch.nn as nn
 import os
