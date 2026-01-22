@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     best_ndcg = float("-inf")
     for epoch in tqdm(range(epochs), desc="Training", total=epochs):
-        train_losses.append(trainer.train_epoch(data_manager.train_loader, data_manager.num_items))
+        train_losses.append(trainer.train_epoch_nmf(data_manager.train_loader, data_manager.num_items))
         hr, ndcg = trainer.evaluate(data_manager.valid_loader)
         ndcg_list.append(ndcg)
         hit_list.append(hr)

@@ -77,7 +77,7 @@ class RecSysTrainer:
                 hr, ndcg = self.evaluate(loader=validation_loader)
                 if ndcg > best_ndcg:
                     best_ndcg = ndcg
-                    save_path = Path("trained_models") / f"best_bert_model_num_steps.pth"
+                    save_path = Path("trained_models") / f"best_bert_model.pth"
                     torch.save(self.model.state_dict(), str(save_path))
                 val_hr.append(hr)
                 val_ndcg.append(ndcg)

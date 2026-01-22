@@ -27,17 +27,18 @@ if __name__ == "__main__":
     print(f"Running on {device}")
     model_type = "bert"
     data_manager = MovieLensDataManager(model_type, dataset="ml-1m")
+
     model = Bert4Rec(item_num=data_manager.num_items, hidden_size=256, num_layers=2, num_heads=8,
                     max_sequence_length=data_manager.train_set.max_len, dropout=0.2
                 )
     optimizer = torch.optim.AdamW(
                                 model.parameters(),
-                                lr=1e-3,
+                                lr=1e-4,
                                 weight_decay=0.01
                             )
     
-    num_training_steps = 1000
-    num_training_steps = 10_000
+    num_training_steps = epochs * len(data_manager.train_loader)
+    num_training_steps = 100000
     num_warmup_steps = int(0.1 * num_training_steps)
     scheduler = get_linear_schedule_with_warmup(
                                             optimizer,

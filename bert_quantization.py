@@ -60,7 +60,7 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
     print(f"Number of neurons in embedding: {m.item_embedding.weight.numel()}")
     trainer = RecSysTrainer(model, None, None, device)
     with torch.amp.autocast("cuda"):
-        hr, ndcg = trainer.evaluate(dm.valid_loader)
+        hr, ndcg = trainer.evaluate(dm.test_loader)
         
     print(model.item_embedding.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
@@ -101,7 +101,14 @@ if __name__ == "__main__":
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # Load base model structure
         model = Bert4Rec(dm.num_items, 128, 8, 4, dm.train_set.max_len)
-        model.load_state_dict(torch.load("testing/best_bert_model.pth"))
+        model = Bert4Rec(item_num=dm.num_items, hidden_size=256, num_layers=2, num_heads=8,
+                max_sequence_length=dm.train_set.max_len, dropout=0.2
+            )
+        #if os.path.exists("testing/best_bert_model_num_steps.pth"):
+        #    model.load_state_dict(torch.load("testing/best_bert_model_num_steps.pth"))
+        
+        if os.path.exists("trained_models/best_bert_model.pth"):
+            model.load_state_dict(torch.load("trained_models/best_bert_model.pth"))
         trained_embedding = model.item_embedding
         if p:
             trained_embedding = prune_embedding(trained_embedding)
