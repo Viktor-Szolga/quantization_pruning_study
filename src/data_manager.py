@@ -52,7 +52,7 @@ class MovieLensDataManager:
 
         self.train_loader = DataLoader(self.train_set, batch_size=256, shuffle=True)
         self.valid_loader = DataLoader(self.valid_set, batch_size=256, shuffle=False)
-        self.test_loader = DataLoader(self.test_set, batch_size=256, shuffle=False)
+        self.test_loader = DataLoader(self.test_set, batch_size=1, shuffle=False)
 
 
     
