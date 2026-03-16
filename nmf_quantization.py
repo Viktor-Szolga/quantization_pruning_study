@@ -9,31 +9,19 @@ import os
 import torch.nn.utils.prune as prune
 import gc
 import warnings
+import pandas as pd
+import pickle
 warnings.filterwarnings(
     "ignore",
     message="Embedding size .* is not divisible by block size"
 )
-    
-# Note: You may need to run: pip install bitsandbytes
-try:
-    import bitsandbytes as bnb
-except ImportError:
-    print("Please install bitsandbytes: pip install bitsandbytes")
+import bitsandbytes as bnb
 
 from src.data_manager import MovieLensDataManager
 from src.models import NeuralMF
 from src.trainer import RecSysTrainer
 import torch.nn.functional as F
 
-
-def check_quantization_norm(module_8_bit, module_4_bit):
-    # placeholder/reminder
-    import torch
-
-    diff_8bit = torch.norm(trained_embedding.weight - module_8_bit.weight.float())
-    diff_4bit = torch.norm(trained_embedding.weight - module_4_bit.weight.float())
-    print("8-bit embedding diff:", diff_8bit.item())
-    print("4-bit embedding diff:", diff_4bit.item())
 
 def prune_embedding(embedding, amount=0.1, unstructured=True):
     if unstructured:
@@ -50,7 +38,7 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
     torch.cuda.reset_peak_memory_stats(device)
     model.to(device)
     with torch.no_grad():
-        users, items, labels = next(iter(dm.valid_loader))
+        users, items, labels = next(iter(dm.test_loader))
         if items.dim() == 1:
             items = items.unsqueeze(1)
         batch_size, num_candidate_items = items.shape
@@ -66,7 +54,7 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
 def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "cpu"):
     trainer = RecSysTrainer(model, None, None, device)
     with torch.amp.autocast("cuda"):
-        hr, ndcg = trainer.evaluate(dm.valid_loader)
+        hr, ndcg, user_hr, user_ndcg = trainer.evaluate(dm.test_loader, performance_per_user=True)
         
     print(model.item_embedding_mf.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
@@ -75,6 +63,8 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
     return {
         "ndcg": ndcg,
         "hr": hr,
+        "user_hr": user_hr,
+        "user_ndcg": user_ndcg,
         "allocated": allocated,
         "peak_allocated": peak_allocated
     }
@@ -140,9 +130,24 @@ def main(path):
 
             gc.collect()
             torch.cuda.empty_cache()
-    return result_dict
+    return result_dicts
 
             
 
 if __name__ == "__main__":
-    results_dicts = main("trained_models/best_nmf_model.pth")
+    name = "trained_models/best_nmf_model.pth"
+    results_list = main(name)
+
+    type_classifications = ["fp32_np","fp16_np", "int8_np", "fp4_np", "nf4_np", "fp32_p","fp16_p", "int8_p", "fp4_p", "nf4_p"]
+
+    for result, type_classification in zip(results_list, type_classifications):
+        user_df = pd.DataFrame({
+            "user_id": list(result["user_hr"].keys()),
+            "hr": list(result["user_hr"].values()),
+            "ndcg": [result["user_ndcg"][u] for u in result["user_hr"].keys()]
+        })
+
+        os.makedirs(f"per_user_results", exist_ok=True)
+        user_df.to_csv(f"per_user_results/{name[15:-4]}_{type_classification}.csv", index=False)
+    with open("results.pkl", "wb") as f:
+        pickle.dump(result, f)

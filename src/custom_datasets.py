@@ -30,7 +30,8 @@ class BERTDataset(Dataset):
         data: List of dicts like [{'seq': [...], 'target': 1907}, ...]
         mode: 'train', 'valid', or 'test'
         """
-        self.data = data
+        self.data = data[0]
+        self.users = data[1]
         self.max_len = max_len
         self.num_items = num_items
         self.mask_token = num_items + 1  # Standard Bert4Rec: item_num + 1
@@ -45,7 +46,7 @@ class BERTDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         seq = item['seq']
-        
+        user = self.users[idx]
         if self.mode in ['valid', 'test']:
             item = self.data[idx]
             seq = item["seq"]
@@ -66,7 +67,7 @@ class BERTDataset(Dataset):
             padding_len = self.max_len - len(tokens)
             tokens = tokens + [0] * padding_len
 
-            return torch.LongTensor(tokens), items
+            return torch.LongTensor(tokens), items, torch.LongTensor([user])
 
         else:
             # Cloze training
@@ -92,5 +93,4 @@ class BERTDataset(Dataset):
             tokens = [0] * padding_len + tokens
             labels = [0] * padding_len + labels
             
-            return torch.LongTensor(tokens), torch.LongTensor(labels)
-        
+            return torch.LongTensor(tokens), torch.LongTensor(labels), torch.LongTensor([user])

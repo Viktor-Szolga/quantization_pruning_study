@@ -74,7 +74,7 @@ with open(BASE_DIR / "data" / out_dir / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
 
 
-
+"""
 
 user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
 
@@ -112,6 +112,50 @@ with open(BASE_DIR / "data" / out_dir / "bert" / "valid.pkl", "wb") as f:
 #bert_test_targets  = test_df.set_index("UserID")["MovieID"].to_dict()
 with open(BASE_DIR / "data" / out_dir / "bert" / "test.pkl", "wb") as f:
     pickle.dump(bert_test_sequences, f)
+"""
+user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
+
+bert_train_sequences = {}
+bert_valid_sequences = {}
+bert_test_sequences = {}
+
+train_user_ids = []
+valid_user_ids = []
+test_user_ids = []
+
+for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(user_history)):
+    if len(items) < 3:
+        continue
+        
+    uid = int(user_id) - 1
+
+    # Train
+    bert_train_sequences[uid] = {
+        "seq": items[:-2]
+    }
+    train_user_ids.append(uid)
+    
+    # Valid
+    bert_valid_sequences[uid] = {
+        "seq": items[:-2], 
+        "target": items[-2]
+    }
+    valid_user_ids.append(uid)
+    
+    # Test
+    bert_test_sequences[uid] = {
+        "seq": items[:-1], 
+        "target": items[-1]
+    }
+    test_user_ids.append(uid)
 
 
+with open(BASE_DIR / "data" / out_dir / "bert" / "train.pkl", "wb") as f:
+    pickle.dump((bert_train_sequences, train_user_ids), f)
+
+with open(BASE_DIR / "data" / out_dir / "bert" / "valid.pkl", "wb") as f:
+    pickle.dump((bert_valid_sequences, valid_user_ids), f)
+
+with open(BASE_DIR / "data" / out_dir / "bert" / "test.pkl", "wb") as f:
+    pickle.dump((bert_test_sequences, test_user_ids), f)
 

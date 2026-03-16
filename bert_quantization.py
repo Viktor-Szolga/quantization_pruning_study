@@ -8,7 +8,9 @@ import torch.nn as nn
 import os
 import torch.nn.utils.prune as prune
 import gc
+import pandas as pd
 import warnings
+import pickle
 warnings.filterwarnings(
     "ignore",
     message="Embedding size .* is not divisible by block size"
@@ -34,7 +36,7 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
     torch.cuda.reset_peak_memory_stats(device)
     model.to(device)
     with torch.no_grad():
-        input = next(iter(dm.valid_loader))[0].to(device)
+        input = next(iter(dm.test_loader))[0].to(device)
         _ = model(input)
     print(f"Memory allocated: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
     print(f"Peak memory used: {torch.cuda.max_memory_allocated(device)/1024**2:.2f} MB")
@@ -42,10 +44,10 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
     return torch.cuda.memory_allocated(device)/1024**2, torch.cuda.max_memory_allocated(device)/1024**2
 
 def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "cpu"):
-    print(f"Number of neurons in embedding: {m.item_embedding.weight.numel()}")
+    print(f"Number of neurons in embedding: {model.item_embedding.weight.numel()}")
     trainer = RecSysTrainer(model, None, None, device)
     with torch.amp.autocast("cuda"):
-        hr, ndcg = trainer.evaluate(dm.valid_loader)
+        hr, ndcg, user_hr, user_ndcg = trainer.evaluate(dm.test_loader, performance_per_user=True)
         
     print(model.item_embedding.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
@@ -54,6 +56,8 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
     return {
         "ndcg": ndcg,
         "hr": hr,
+        "user_hr": user_hr,
+        "user_ndcg": user_ndcg,
         "allocated": allocated,
         "peak_allocated": peak_allocated
     }
@@ -115,4 +119,20 @@ def main(path):
     return result_dicts
 
 if __name__ == "__main__":
-    result_dicts = main("trained_models/best_bert_model_num_steps.pth")
+    name = "trained_models/bert_model_42.pth"
+
+    results_list = main(name)
+
+    type_classifications = ["fp32_np","fp16_np", "int8_np", "fp4_np", "nf4_np", "fp32_p","fp16_p", "int8_p", "fp4_p", "nf4_p"]
+
+    for result, type_classification in zip(results_list, type_classifications):
+        user_df = pd.DataFrame({
+            "user_id": list(result["user_hr"].keys()),
+            "hr": list(result["user_hr"].values()),
+            "ndcg": [result["user_ndcg"][u] for u in result["user_hr"].keys()]
+        })
+
+        os.makedirs(f"per_user_results", exist_ok=True)
+        user_df.to_csv(f"per_user_results/{name[15:-4]}_{type_classification}.csv", index=False)
+    with open("results.pkl", "wb") as f:
+        pickle.dump(result, f)

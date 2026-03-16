@@ -60,7 +60,7 @@ class RecSysTrainer:
                 train_iter = iter(train_loader)
                 batch = next(train_iter)
 
-            tokens, labels = [b.to(self.device) for b in batch]
+            tokens, labels, _ = [b.to(self.device) for b in batch]
 
             self.optimizer.zero_grad()
 
@@ -88,7 +88,10 @@ class RecSysTrainer:
             
         return train_losses, val_hr, val_ndcg, eval_at
         
-    def evaluate(self, loader, k=10):
+    def evaluate(self, loader, k=10, performance_per_user=False):
+        if performance_per_user:
+            user_hr = {}
+            user_ndcg = {}
         if isinstance(self.model, NeuralMF):
             self.model.eval()
             ndcg_list = []
@@ -114,14 +117,21 @@ class RecSysTrainer:
                     _, indices = torch.topk(scores, k=current_k, dim=1)
 
                     for i in range(batch_size):
+                        user_id = users[i].item()
                         if 0 in indices[i]: 
-                            hr_list.append(1.0)
+                            hr = 1.0
                             rank = (indices[i] == 0).nonzero(as_tuple=True)[0].item()
-                            ndcg_list.append(1.0 / np.log2(rank + 2))
+                            ndcg = 1.0 / np.log2(rank + 2)
                         else:
-                            hr_list.append(0.0)
-                            ndcg_list.append(0.0)
-                    
+                            hr = 0.0
+                            ndcg = 0.0
+                        if performance_per_user:
+                            user_hr[user_id] = hr
+                            user_ndcg[user_id] = ndcg
+                        hr_list.append(hr)
+                        ndcg_list.append(ndcg)
+            if performance_per_user:
+                return np.mean(hr_list), np.mean(ndcg_list), user_hr, user_ndcg
             return np.mean(hr_list), np.mean(ndcg_list)
         
         else:
@@ -131,7 +141,7 @@ class RecSysTrainer:
 
             with torch.no_grad():
                 for batch in loader:
-                    seq, items = [b.to(self.device) for b in batch]
+                    seq, items, users = [b.to(self.device) for b in batch]
 
                     batch_size, num_candidates = items.shape
                     current_k = min(k, num_candidates)
@@ -143,14 +153,22 @@ class RecSysTrainer:
                     _, indices = torch.topk(scores, k=current_k, dim=1)
 
                     for i in range(batch_size):
-                        if 0 in indices[i]:
-                            hr_list.append(1.0)
+                        user_id = users[i].item()
+                        if 0 in indices[i]: 
+                            hr = 1.0
                             rank = (indices[i] == 0).nonzero(as_tuple=True)[0].item()
-                            ndcg_list.append(1.0 / np.log2(rank + 2))
+                            ndcg = 1.0 / np.log2(rank + 2)
                         else:
-                            hr_list.append(0.0)
-                            ndcg_list.append(0.0)
+                            hr = 0.0
+                            ndcg = 0.0
+                        if performance_per_user:
+                            user_hr[user_id] = hr
+                            user_ndcg[user_id] = ndcg
+                        hr_list.append(hr)
+                        ndcg_list.append(ndcg)
 
+            if performance_per_user:
+                return np.mean(hr_list), np.mean(ndcg_list), user_hr, user_ndcg
             return np.mean(hr_list), np.mean(ndcg_list)
     
     def report_model_size(self):
