@@ -13,27 +13,12 @@ warnings.filterwarnings(
     "ignore",
     message="Embedding size .* is not divisible by block size"
 )
-    
-# Note: You may need to run: pip install bitsandbytes
-try:
-    import bitsandbytes as bnb
-except ImportError:
-    print("Please install bitsandbytes: pip install bitsandbytes")
+import bitsandbytes as bnb
 
 from src.data_manager import MovieLensDataManager
 from src.models import Bert4Rec
 from src.trainer import RecSysTrainer
 import torch.nn.functional as F
-
-
-def check_quantization_norm(module_8_bit, module_4_bit):
-    # placeholder/reminder
-    import torch
-
-    diff_8bit = torch.norm(trained_embedding.weight - module_8_bit.weight.float())
-    diff_4bit = torch.norm(trained_embedding.weight - module_4_bit.weight.float())
-    print("8-bit embedding diff:", diff_8bit.item())
-    print("4-bit embedding diff:", diff_4bit.item())
 
 def prune_embedding(embedding, amount=0.1, unstructured=True):
     if unstructured:
@@ -43,7 +28,6 @@ def prune_embedding(embedding, amount=0.1, unstructured=True):
         return module
     else:
         pass
-
 
 def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu"):
     device = "cuda"
@@ -55,6 +39,7 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
     print(f"Memory allocated: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
     print(f"Peak memory used: {torch.cuda.max_memory_allocated(device)/1024**2:.2f} MB")
 
+    return torch.cuda.memory_allocated(device)/1024**2, torch.cuda.max_memory_allocated(device)/1024**2
 
 def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "cpu"):
     print(f"Number of neurons in embedding: {m.item_embedding.weight.numel()}")
@@ -64,8 +49,14 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
         
     print(model.item_embedding.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
-    print_size(model, dm)
+    allocated, peak_allocated = print_size(model, dm)
     print(f"---"*10)
+    return {
+        "ndcg": ndcg,
+        "hr": hr,
+        "allocated": allocated,
+        "peak_allocated": peak_allocated
+    }
 
 
 def get_quantized_embeddings(embedding, device = "cuda" if torch.cuda.is_available() else "cpu"):
@@ -93,8 +84,8 @@ def get_model_variants(model, quantized_list, named_parameter):
         variants.append(m)
     return variants
 
-
-if __name__ == "__main__":
+def main(path):
+    result_dicts = []
     prune_model = [False, True]
     for p in prune_model:
         dm = MovieLensDataManager("bert")
@@ -103,7 +94,7 @@ if __name__ == "__main__":
         model = Bert4Rec(item_num=dm.num_items, hidden_size=256, num_layers=2, num_heads=8,
                     max_sequence_length=dm.train_set.max_len, dropout=0.2
                 )
-        model.load_state_dict(torch.load("trained_models/best_bert_model_num_steps.pth"))
+        model.load_state_dict(torch.load(path))
         trained_embedding = model.item_embedding
         if p:
             trained_embedding = prune_embedding(trained_embedding)
@@ -115,8 +106,13 @@ if __name__ == "__main__":
 
         for m, test_embedding in zip(models, test_embeddings):
             m.test_embedding = test_embedding
-            evaluate_model(m, dm)
+            result_dict = evaluate_model(m, dm)
+            result_dicts.append(result_dict)
             m.to("cpu")
 
             gc.collect()
             torch.cuda.empty_cache()
+    return result_dicts
+
+if __name__ == "__main__":
+    result_dicts = main("trained_models/best_bert_model_num_steps.pth")

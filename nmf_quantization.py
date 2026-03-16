@@ -61,7 +61,7 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
             scores = model(users_flat, items_flat)
     print(f"Memory allocated: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
     print(f"Peak memory used: {torch.cuda.max_memory_allocated(device)/1024**2:.2f} MB")
-
+    return torch.cuda.memory_allocated(device)/1024**2, torch.cuda.max_memory_allocated(device)/1024**2
 
 def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "cpu"):
     trainer = RecSysTrainer(model, None, None, device)
@@ -70,8 +70,14 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
         
     print(model.item_embedding_mf.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
-    print_size(model, dm)
+    allocated, peak_allocated = print_size(model, dm)
     print(f"---"*10)
+    return {
+        "ndcg": ndcg,
+        "hr": hr,
+        "allocated": allocated,
+        "peak_allocated": peak_allocated
+    }
 
 
 def get_quantized_embeddings(embedding, device = "cuda" if torch.cuda.is_available() else "cpu"):
@@ -100,15 +106,16 @@ def get_model_variants(model, quantized_list, named_parameter):
     return variants
 
 
-if __name__ == "__main__":
+
+def main(path):
+    result_dicts = []
     prune_model = [False, True]
     for p in prune_model:
         
         dm = MovieLensDataManager("nmf")
         model = NeuralMF(num_users=dm.num_users + 1, num_items=dm.num_items + 1, latent_mf=32, latent_mlp=512, hidden_sizes=[512, 256, 128, 64])
         
-        if os.path.exists("trained_models/best_nmf_model.pth"):
-            model.load_state_dict(torch.load("trained_models/best_nmf_model.pth", map_location="cuda"))
+        model.load_state_dict(torch.load(path, map_location="cuda"))
         
         embeddings = [model.item_embedding_mf, model.item_embedding_mlp, model.user_embedding_mf, model.user_embedding_mlp]
         pruned_embeddings=[]
@@ -127,8 +134,15 @@ if __name__ == "__main__":
 
         for m, test_embedding in zip(models, test_embeddings):
             m.test_embedding = test_embedding
-            evaluate_model(m, dm)
+            result_dict = evaluate_model(m, dm)
+            result_dicts.append(result_dict)
             m.to("cpu")
 
             gc.collect()
             torch.cuda.empty_cache()
+    return result_dict
+
+            
+
+if __name__ == "__main__":
+    results_dicts = main("trained_models/best_nmf_model.pth")
