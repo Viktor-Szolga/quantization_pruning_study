@@ -18,8 +18,8 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-if __name__ == "__main__":
-    set_seed(42)
+def main(seed=42):
+    set_seed(seed)
 
     model_type = "nmf"
     data_manager = MovieLensDataManager(model_type)
@@ -43,7 +43,7 @@ if __name__ == "__main__":
         if ndcg > best_ndcg:
             best_ndcg = ndcg
             os.makedirs("trained_models", exist_ok=True)
-            save_path = Path("trained_models") / f"best_{model_type}_model.pth"
+            save_path = Path("trained_models") / f"nmf_model_{seed}.pth"
             torch.save(model.state_dict(), str(save_path))
 
     plt.plot(range(epochs), train_losses, label="Train")
@@ -57,3 +57,6 @@ if __name__ == "__main__":
     plt.plot(range(epochs), ndcg_list, label="Train")
     plt.title("NDCG")
     plt.show()
+
+if __name__ == "__main__":
+    main(42)

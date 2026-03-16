@@ -18,9 +18,8 @@ def set_seed(seed=42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-
-if __name__ == "__main__":
-    set_seed(42)
+def main(seed=42):
+    set_seed(seed)
     device="cuda" if torch.cuda.is_available() else "cpu"
     epochs = 300
     
@@ -51,7 +50,7 @@ if __name__ == "__main__":
     ndcg_list = []
     hit_list = []
     
-    train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps)
+    train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps, name=f"bert_model_{seed}")
 
     plt.plot(range(num_training_steps), train_losses, label="Train")
     plt.title("Train loss")
@@ -64,3 +63,6 @@ if __name__ == "__main__":
     plt.plot(eval_at, ndcg_list, label="Valid NDCG")
     plt.title("NDCG")
     plt.show()
+
+if __name__ == "__main__":
+    main(42)
