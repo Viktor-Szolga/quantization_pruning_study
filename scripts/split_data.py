@@ -3,9 +3,10 @@ import pandas as pd
 import numpy as np
 import pickle
 from tqdm import tqdm
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-dataset = "ml-20m"
+dataset = "ml-1m"
 sep = "," if dataset == "ml-20m" else "::"
 DATA_DIR = BASE_DIR / "data" / dataset
 """
@@ -29,7 +30,7 @@ full_movies = pd.read_csv(
 """
 if dataset == "ml-1m":
     full_ratings = pd.read_csv(
-        DATA_DIR / "ratings.csv",
+        DATA_DIR / "ratings.dat",
         sep=sep,
         header=None,
         engine="python",
@@ -38,7 +39,7 @@ if dataset == "ml-1m":
     )
 if dataset == "ml-20m":
     full_ratings = pd.read_csv(
-        DATA_DIR / "ratings.csv",
+        DATA_DIR / "ratings.dat",
         sep=sep,
         engine="python",
         header=0,
@@ -57,14 +58,19 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
+out_dir = "processed1" if dataset == "ml-1m" else "processed20"
+os.makedirs(BASE_DIR / "data" / out_dir, exist_ok=True)
+os.makedirs(BASE_DIR / "data" / out_dir / "nmf", exist_ok=True)
+os.makedirs(BASE_DIR / "data" / out_dir/ "bert", exist_ok=True)
+
 nmf_train = train_df[["UserID", "MovieID", "Rating"]].to_numpy()
-with open(BASE_DIR / "data" / "processed20" / "nmf" / "train.pkl", "wb") as f:
+with open(BASE_DIR / "data" / out_dir / "nmf" / "train.pkl", "wb") as f:
     pickle.dump(nmf_train, f)
 nmf_valid = valid_df[["UserID", "MovieID", "Rating"]].to_numpy()
-with open(BASE_DIR / "data" / "processed20" / "nmf" / "valid.pkl", "wb") as f:
+with open(BASE_DIR / "data" / out_dir / "nmf" / "valid.pkl", "wb") as f:
     pickle.dump(nmf_valid, f)
 nmf_test  = test_df[["UserID", "MovieID", "Rating"]].to_numpy()
-with open(BASE_DIR / "data" / "processed20" / "nmf" / "test.pkl", "wb") as f:
+with open(BASE_DIR / "data" / out_dir / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
 
 
@@ -98,13 +104,13 @@ for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(use
         "target": items[-1]
     }
 #bert_train_sequences = train_df.groupby("UserID")["MovieID"].apply(list).to_dict()
-with open(BASE_DIR / "data" / "processed20" / "bert" / "train.pkl", "wb") as f:
+with open(BASE_DIR / "data" / out_dir / "bert" / "train.pkl", "wb") as f:
     pickle.dump(bert_train_sequences, f)
 #bert_valid_targets = valid_df.set_index("UserID")["MovieID"].to_dict()
-with open(BASE_DIR / "data" / "processed20" / "bert" / "valid.pkl", "wb") as f:
+with open(BASE_DIR / "data" / out_dir / "bert" / "valid.pkl", "wb") as f:
     pickle.dump(bert_valid_sequences, f)
 #bert_test_targets  = test_df.set_index("UserID")["MovieID"].to_dict()
-with open(BASE_DIR / "data" / "processed20" / "bert" / "test.pkl", "wb") as f:
+with open(BASE_DIR / "data" / out_dir / "bert" / "test.pkl", "wb") as f:
     pickle.dump(bert_test_sequences, f)
 
 

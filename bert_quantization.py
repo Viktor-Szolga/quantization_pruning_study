@@ -100,8 +100,10 @@ if __name__ == "__main__":
         dm = MovieLensDataManager("bert")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # Load base model structure
-        model = Bert4Rec(dm.num_items, 128, 8, 4, dm.train_set.max_len)
-        model.load_state_dict(torch.load("testing/best_bert_model.pth"))
+        model = Bert4Rec(item_num=dm.num_items, hidden_size=256, num_layers=2, num_heads=8,
+                    max_sequence_length=dm.train_set.max_len, dropout=0.2
+                )
+        model.load_state_dict(torch.load("trained_models/best_bert_model_num_steps.pth"))
         trained_embedding = model.item_embedding
         if p:
             trained_embedding = prune_embedding(trained_embedding)

@@ -5,9 +5,9 @@ import numpy as np
 
 class NMFDatset(Dataset):
     def __init__(self, data_array, all_item_ids=None, num_negatives=0):
-        self.users = torch.LongTensor(data_array[:, 0])
-        self.items = torch.LongTensor(data_array[:, 1])
-        self.ratings = torch.FloatTensor(data_array[:, 2])
+        self.users = torch.LongTensor(data_array[:, 0].copy())
+        self.items = torch.LongTensor(data_array[:, 1].copy())
+        self.ratings = torch.FloatTensor(data_array[:, 2].copy())
         self.all_item_ids = all_item_ids
         self.num_negatives = num_negatives
 

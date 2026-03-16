@@ -105,10 +105,10 @@ if __name__ == "__main__":
     for p in prune_model:
         
         dm = MovieLensDataManager("nmf")
-        model = NeuralMF(num_users=dm.num_users+1, num_items=dm.num_items+1, latent_mf=4, latent_mlp=32)
+        model = NeuralMF(num_users=dm.num_users + 1, num_items=dm.num_items + 1, latent_mf=32, latent_mlp=512, hidden_sizes=[512, 256, 128, 64])
         
-        if os.path.exists("testing/best_nmf_model copy.pth"):
-            model.load_state_dict(torch.load("testing/best_nmf_model copy.pth", map_location="cuda"))
+        if os.path.exists("trained_models/best_nmf_model.pth"):
+            model.load_state_dict(torch.load("trained_models/best_nmf_model.pth", map_location="cuda"))
         
         embeddings = [model.item_embedding_mf, model.item_embedding_mlp, model.user_embedding_mf, model.user_embedding_mlp]
         pruned_embeddings=[]
@@ -126,7 +126,7 @@ if __name__ == "__main__":
         models = get_model_variants(model, quantized_embeddings, ["item_embedding_mf", "item_embedding_mlp", "user_embedding_mf", "user_embedding_mlp"])
 
         for m, test_embedding in zip(models, test_embeddings):
-            #m.test_embedding = test_embedding
+            m.test_embedding = test_embedding
             evaluate_model(m, dm)
             m.to("cpu")
 
