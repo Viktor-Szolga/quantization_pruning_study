@@ -14,7 +14,7 @@ model:
 
 training:
   epochs: 50
-  batch_size: null  # handled inside data manager if applicable
+  batch_size: 64  # handled inside data manager if applicable
 
 optimizer:
   name: AdamW
