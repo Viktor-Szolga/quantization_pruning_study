@@ -11,6 +11,8 @@ from transformers import get_linear_schedule_with_warmup
 import os
 from omegaconf import OmegaConf
 from src.utils import set_seed    
+import warnings
+warnings.filterwarnings("ignore", message="The PyTorch API of nested tensors")
 
 def main(config_path):
     cfg = OmegaConf.load(config_path)
@@ -39,8 +41,8 @@ def main(config_path):
         case "linear_with_warmup":
             scheduler = get_linear_schedule_with_warmup(
                                             optimizer,
-                                            num_warmup_steps=cfg.training.max_steps*cfg.training.warmup_ratio,
-                                            num_training_steps=cfg.training.max_steps
+                                            num_warmup_steps=cfg.training.update_steps*cfg.training.warmup_ratio,
+                                            num_training_steps=cfg.training.update_steps
                                         )
         case None:
             scheduler = None
@@ -66,31 +68,23 @@ def main(config_path):
                     save_path = Path(cfg.saving.save_dir) / f"{cfg.saving.filename}_{cfg.seed}"
                     torch.save(model.state_dict(), str(save_path))
 
-            os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}", exist_ok=True)
+            os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}_{cfg.seed}", exist_ok=True)
 
             plt.plot(range(cfg.training.epochs), train_losses, label="Train")
             plt.title("Train loss")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}/train_loss.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{cfg.seed}.png")
             plt.close()
 
             plt.plot(range(cfg.training.epochs), hit_list, label="HR")
             plt.title("HR")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}/hit_rate.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{cfg.seed}.png")
             plt.close()
 
             plt.plot(range(cfg.training.epochs), ndcg_list, label="NDCG")
             plt.title("NDCG")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}/ndcg.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
             plt.close()
         case "bert":
-            num_training_steps = 1000
-            num_training_steps = 10_000
-            num_warmup_steps = int(0.1 * num_training_steps)
-            scheduler = get_linear_schedule_with_warmup(
-                                                    optimizer,
-                                                    num_warmup_steps=num_warmup_steps,
-                                                    num_training_steps=num_training_steps
-                                                )
             criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
             trainer = RecSysTrainer(model, optimizer, criterion, device=device, scheduler=scheduler)
             
@@ -98,23 +92,25 @@ def main(config_path):
             ndcg_list = []
             hit_list = []
             
-            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps, save_path=f"trained_models")
+            os.makedirs(cfg.saving.save_dir, exist_ok=True)
+            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, accumulation_steps=cfg.training.accumulation_steps,
+                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.seed}")
 
-            os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:]}", exist_ok=True)
+            os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
-            plt.plot(range(cfg.training.max_steps), train_losses, label="Train")
+            plt.plot(range(cfg.training.update_steps*cfg.training.accumulation_steps), train_losses, label="Train")
             plt.title("Train loss")
-            plt.savefig(f"trained_models/train_loss.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{cfg.seed}.png")
             plt.close()
 
-            plt.plot(range(cfg.training.max_steps), hit_list, label="HR")
+            plt.plot(eval_at, hit_list, label="HR")
             plt.title("HR")
-            plt.savefig(f"trained_models/hit_rate.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{cfg.seed}.png")
             plt.close()
 
-            plt.plot(range(cfg.training.max_steps), ndcg_list, label="NDCG")
+            plt.plot(eval_at, ndcg_list, label="NDCG")
             plt.title("NDCG")
-            plt.savefig(f"trained_models/ndcg.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
             plt.close()
      
 
