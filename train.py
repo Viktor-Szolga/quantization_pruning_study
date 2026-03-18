@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import random
-from src.data_manager import MovieLensDataManager
+from src.data_manager import DataManager, MovieLensDataManager
 from src.trainer import RecSysTrainer
 from src.models import NeuralMF, Bert4Rec
 from tqdm import tqdm
@@ -17,7 +17,7 @@ def main(config_path):
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    data_manager = MovieLensDataManager(cfg.model.type, cfg.dataset.name)
+    data_manager = DataManager(cfg.model.type, cfg.dataset.name)
     match cfg.model.type:
         case "nmf":
             model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=cfg.model.params.latent_mf, latent_mlp=cfg.model.params.latent_mlp, hidden_sizes=cfg.model.params.hidden_sizes)
@@ -119,4 +119,4 @@ def main(config_path):
     
 
 if __name__ == "__main__":
-    main("configs/bert/ml-1m.yaml")
+    main("configs/nmf/ml-1m.yaml")

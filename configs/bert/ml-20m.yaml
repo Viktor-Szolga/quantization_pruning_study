@@ -1,0 +1,47 @@
+seed: 42
+device: auto  # options: "auto", "cpu", "cuda"
+
+dataset:
+  name: "ml-20m"
+
+model:
+  type: bert
+  name: Bert4Rec
+  params:
+    hidden_size: 256
+    num_layers: 2
+    num_heads: 8
+    dropout: 0.2
+    # max_sequence_length is inferred from data_manager
+
+training:
+  max_steps: 10000
+  warmup_ratio: 0.1
+
+optimizer:
+  name: AdamW
+  lr: 0.001
+  weight_decay: 0.01
+
+scheduler:
+  name: linear_with_warmup
+
+loss:
+  name: CrossEntropyLoss
+  params:
+    ignore_index: 0
+
+data:
+  dataset: MovieLens
+  model_type: bert
+
+evaluation:
+  metrics:
+    - hit_rate
+    - ndcg
+
+saving:
+  save_best: true
+  save_dir: trained_models
+  filename: bert_model
+  figure_dir: figures
