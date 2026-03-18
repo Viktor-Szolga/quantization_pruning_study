@@ -12,11 +12,12 @@ model:
     num_layers: 2
     num_heads: 8
     dropout: 0.2
-    # max_sequence_length is inferred from data_manager
+    max_sequence_length: 75
 
 training:
   max_steps: 10000
   warmup_ratio: 0.1
+  batch_size: 32
 
 optimizer:
   name: AdamW

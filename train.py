@@ -17,13 +17,13 @@ def main(config_path):
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    data_manager = DataManager(cfg.model.type, cfg.dataset.name)
+    data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg.training.batch_size, cfg.model.params.max_sequence_length)
     match cfg.model.type:
         case "nmf":
             model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=cfg.model.params.latent_mf, latent_mlp=cfg.model.params.latent_mlp, hidden_sizes=cfg.model.params.hidden_sizes)
         case "bert":
             model = Bert4Rec(item_num=data_manager.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
-                    max_sequence_length=data_manager.train_set.max_len, dropout=cfg.model.params.dropout
+                    max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
                 )
 
     if cfg.optimizer.name == "AdamW":
@@ -98,26 +98,25 @@ def main(config_path):
             ndcg_list = []
             hit_list = []
             
-            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.seed}")
+            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps, save_path=f"trained_models")
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:]}", exist_ok=True)
 
             plt.plot(range(cfg.training.max_steps), train_losses, label="Train")
             plt.title("Train loss")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}/train_loss.png")
+            plt.savefig(f"trained_models/train_loss.png")
             plt.close()
 
             plt.plot(range(cfg.training.max_steps), hit_list, label="HR")
             plt.title("HR")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}/hit_rate.png")
+            plt.savefig(f"trained_models/hit_rate.png")
             plt.close()
 
             plt.plot(range(cfg.training.max_steps), ndcg_list, label="NDCG")
             plt.title("NDCG")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:]}_{cfg.seed}/ndcg.png")
+            plt.savefig(f"trained_models/ndcg.png")
             plt.close()
-    
+     
 
 if __name__ == "__main__":
     main("configs/bert/ml-1m.yaml")
-    
