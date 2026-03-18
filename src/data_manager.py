@@ -66,8 +66,6 @@ class DataManager:
             self.test_data = pickle.load(f)
         with open(ROOT_DIR / "data" / f"processed_{dataset}" / "stats.pkl", "rb") as f:
             self.num_users, self.num_items = pickle.load(f)
-        print(self.num_items)
-        print(self.num_users)
             
         match model_type.upper():
             case "NMF":

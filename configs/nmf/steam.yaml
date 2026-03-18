@@ -1,0 +1,44 @@
+seed: 42
+device: auto  # options: "auto", "cpu", "cuda"
+
+dataset:
+  name: "steam"
+
+model:
+  type: nmf
+  name: NeuralMF
+  params:
+    latent_mf: 32
+    latent_mlp: 512
+    hidden_sizes: [512, 256, 128, 64]
+
+training:
+  epochs: 50
+  batch_size: null  # handled inside data manager if applicable
+
+optimizer:
+  name: AdamW
+  lr: 0.0005
+  weight_decay: 0.01
+
+scheduler:
+  name: null
+
+loss:
+  name: BCELoss
+
+data:
+  dataset: MovieLens
+  num_users_offset: 1
+  num_items_offset: 1
+
+evaluation:
+  metrics:
+    - hit_rate
+    - ndcg
+
+saving:
+  save_best: true
+  save_dir: trained_models
+  filename: nmf_model
+  figure_dir: figures

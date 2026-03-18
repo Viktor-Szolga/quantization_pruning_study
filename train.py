@@ -119,4 +119,4 @@ def main(config_path):
     
 
 if __name__ == "__main__":
-    main("configs/nmf/ml-1m.yaml")
+    main("configs/nmf/beauty.yaml")
