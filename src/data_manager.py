@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).parent.parent
 class MovieLensDataManager:
     def __init__(self, model_type: str, dataset="ml-1m"):
         if dataset == "ml-1m":
-            processing_dir = "processed1"
+            processing_dir = "processed_ml-1m"
         if dataset == "ml-20m":
             processing_dir = "processed20"
         with open(ROOT_DIR / "data" / processing_dir / model_type.lower() / "train.pkl", "rb") as f:

@@ -58,7 +58,7 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
-out_dir = "processed1" if dataset == "ml-1m" else "processed20"
+out_dir = "processed_ml-1m" if dataset == "ml-1m" else "processed20"
 os.makedirs(BASE_DIR / "data" / out_dir, exist_ok=True)
 os.makedirs(BASE_DIR / "data" / out_dir / "nmf", exist_ok=True)
 os.makedirs(BASE_DIR / "data" / out_dir/ "bert", exist_ok=True)
@@ -74,45 +74,8 @@ with open(BASE_DIR / "data" / out_dir / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
 
 
-"""
 
-user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
 
-bert_train_sequences = {}
-bert_valid_sequences = {}
-bert_test_sequences = {}
-
-for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(user_history.items())):
-    if len(items) < 3: # Need at least 3 items for Train/Valid/Test LOO
-        continue
-        
-    # Train: All items except the last two
-    bert_train_sequences[int(user_id)-1] = {
-        "seq": items[:-2]
-    }
-    
-    # Valid: Input is train items, Target is the second to last item
-    # We save both so the Dataset knows what to mask and what to check
-    bert_valid_sequences[int(user_id)-1] = {
-        "seq": items[:-2], 
-        "target": items[-2]
-    }
-    
-    # Test: Input is train + valid items, Target is the very last item
-    bert_test_sequences[int(user_id)-1] = {
-        "seq": items[:-1], 
-        "target": items[-1]
-    }
-#bert_train_sequences = train_df.groupby("UserID")["MovieID"].apply(list).to_dict()
-with open(BASE_DIR / "data" / out_dir / "bert" / "train.pkl", "wb") as f:
-    pickle.dump(bert_train_sequences, f)
-#bert_valid_targets = valid_df.set_index("UserID")["MovieID"].to_dict()
-with open(BASE_DIR / "data" / out_dir / "bert" / "valid.pkl", "wb") as f:
-    pickle.dump(bert_valid_sequences, f)
-#bert_test_targets  = test_df.set_index("UserID")["MovieID"].to_dict()
-with open(BASE_DIR / "data" / out_dir / "bert" / "test.pkl", "wb") as f:
-    pickle.dump(bert_test_sequences, f)
-"""
 user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
 
 bert_train_sequences = {}

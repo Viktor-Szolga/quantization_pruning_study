@@ -11,7 +11,7 @@ MIN_INTERACTIONS = 5
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data" / dataset
-OUT_DIR = BASE_DIR / "data" / "processed20" if dataset == "ml-20m" else BASE_DIR / "data" / "processed1m"
+OUT_DIR = BASE_DIR / "data" / "processed20" if dataset == "ml-20m" else BASE_DIR / "data" / "processed_ml-1mm"
 
 (OUT_DIR / "nmf").mkdir(parents=True, exist_ok=True)
 (OUT_DIR / "bert").mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,4 @@
 *.csv
 *.pkl
 *.pth
+!data/ml-20m/*.csv
