@@ -98,7 +98,7 @@ def main(config_path):
             ndcg_list = []
             hit_list = []
             
-            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps, name=f"{cfg.save_dir}/{cfg.saving.filename}_{cfg.seed}")
+            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, max_steps=num_training_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.seed}")
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:]}", exist_ok=True)
 
@@ -119,4 +119,4 @@ def main(config_path):
     
 
 if __name__ == "__main__":
-    main("configs/nmf/ml-1m.yaml")
+    main("configs/bert/ml-1m.yaml")
