@@ -44,11 +44,11 @@ class BERTDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        item = self.data[idx]
-        seq = item['seq']
         user = self.users[idx]
+        item = self.data[user]
+        seq = item['seq']
         if self.mode in ['valid', 'test']:
-            item = self.data[idx]
+            item = self.data[user]
             seq = item["seq"]
             target = item["target"]
 
