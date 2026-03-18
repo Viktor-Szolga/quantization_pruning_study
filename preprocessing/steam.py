@@ -6,13 +6,22 @@ import json
 import os
 import ast
 
+import gzip
+import shutil
+
 # Constants
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATASET = "steam"
 SEP = "::"
 DATA_DIR = BASE_DIR / "data" / DATASET
-FILE = DATA_DIR / "steam_new.json"
+ZIPPEDFILE = DATA_DIR / "steam_reviews.json.gz"
 OUT_DIR = f"processed_{DATASET}"
+FILE = ZIPPEDFILE.with_suffix("")
+# Unzip file
+if not os.path.isfile(FILE):   
+    with gzip.open(ZIPPEDFILE, 'rb') as f_in:
+        with open(FILE, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
 
 # Generate Structure
 os.makedirs(BASE_DIR / "data" / OUT_DIR, exist_ok=True)

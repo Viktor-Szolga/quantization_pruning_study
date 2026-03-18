@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATASET = "beauty"
 SEP = "::"
 DATA_DIR = BASE_DIR / "data" / DATASET
-FILE = DATA_DIR / "All_Beauty.jsonl"
+FILE = DATA_DIR / "All_Beauty.jsonl.gz"
 OUT_DIR = f"processed_{DATASET}"
 
 # Generate Structure
