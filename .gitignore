@@ -1,4 +1,6 @@
 *.csv
 *.pkl
 *.pth
+*.json
+*.jsonl
 !data/ml-20m/*.csv
