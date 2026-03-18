@@ -12,12 +12,13 @@ model:
     num_layers: 2
     num_heads: 8
     dropout: 0.2
-    max_sequence_length: 100
+    max_sequence_length: 75
 
 training:
-  max_steps: 10000
+  update_steps: 10000
   warmup_ratio: 0.1
-  batch_size: 64
+  batch_size: 32
+  accumulation_steps: 4
 
 optimizer:
   name: AdamW
