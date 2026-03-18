@@ -44,8 +44,8 @@ nmf_train = train_df[["UserID", "ItemID", "Rating"]].to_numpy()
 nmf_valid = valid_df[["UserID", "ItemID", "Rating"]].to_numpy()
 nmf_test  = test_df[["UserID", "ItemID", "Rating"]].to_numpy()
 
-num_users = df["UserID"].nunique()
-num_items = df["ItemID"].nunique()
+num_users = df["UserID"].max()
+num_items = df["ItemID"].max()
 
 stats = (num_users, num_items)
 

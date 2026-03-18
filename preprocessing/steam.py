@@ -66,8 +66,8 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
-num_users = sorted_ratings["UserID"].nunique()
-num_items = sorted_ratings["ItemID"].nunique()
+num_users = sorted_ratings["UserID"].max()
+num_items = sorted_ratings["ItemID"].max()
 
 stats = (num_users, num_items)
 

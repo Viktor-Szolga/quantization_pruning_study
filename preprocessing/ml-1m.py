@@ -37,8 +37,8 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
-num_users = full_ratings["UserID"].nunique()
-num_items = full_ratings["ItemID"].nunique()
+num_users = full_ratings["UserID"].max()
+num_items = full_ratings["MovieID"].max()
 
 stats = (num_users, num_items)
 
