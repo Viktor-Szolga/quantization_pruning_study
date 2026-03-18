@@ -45,7 +45,7 @@ class RecSysTrainer:
             
         return total_loss / len(loader)
     
-    def train_n_steps_bert(self, train_loader, validation_loader, max_steps, validation_interval=1000, k=10, name="bert"):
+    def train_n_steps_bert(self, train_loader, validation_loader, max_steps, validation_interval=1000, k=10, save_path="bert"):
         self.model.train()
         train_losses = []
         val_hr = []
@@ -78,9 +78,7 @@ class RecSysTrainer:
                 hr, ndcg = self.evaluate(loader=validation_loader)
                 if ndcg > best_ndcg:
                     best_ndcg = ndcg
-                    os.makedirs("trained_models", exist_ok=True)
-                    save_path = Path("trained_models") / f"{name}.pth"
-                    torch.save(self.model.state_dict(), str(save_path))
+                    torch.save(self.model.state_dict(), f"{save_path}.pth")
                 val_hr.append(hr)
                 val_ndcg.append(ndcg)
                 eval_at.append(i)

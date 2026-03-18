@@ -56,3 +56,28 @@ class MovieLensDataManager:
 
 
     
+class DataManager:
+    def __init__(self, model_type, dataset):
+        with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "train.pkl", "rb") as f:
+            self.train_data = pickle.load(f)
+        with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "valid.pkl", "rb") as f:
+            self.valid_data = pickle.load(f)
+        with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "test.pkl", "rb") as f:
+            self.test_data = pickle.load(f)
+        with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "stats.pkl", "rb") as f:
+            self.num_users, self.num_items = pickle.load(f)
+
+            
+        match model_type.upper():
+            case "NMF":
+                self.train_set = NMFDatset(self.train_data)
+                self.valid_set = NMFDatset(self.valid_data, all_item_ids=np.arange(1, self.num_items+1), num_negatives=100)
+                self.test_set = NMFDatset(self.test_data, all_item_ids=np.arange(1, self.num_items+1), num_negatives=100)
+            case "BERT":
+                self.train_set = BERTDataset(self.train_data, mode="train")
+                self.valid_set = BERTDataset(self.valid_data, all_item_ids=np.arange(1, self.num_items+1), mode="valid", num_negatives=100)
+                self.test_set = BERTDataset(self.test_data, all_item_ids=np.arange(1, self.num_items+1), mode="test", num_negatives=100)
+
+        self.train_loader = DataLoader(self.train_set, batch_size=256, shuffle=True)
+        self.valid_loader = DataLoader(self.valid_set, batch_size=256, shuffle=False)
+        self.test_loader = DataLoader(self.test_set, batch_size=256, shuffle=False)

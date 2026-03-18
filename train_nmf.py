@@ -8,14 +8,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pathlib import Path
 import os
-
-def set_seed(seed=42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+from utils import set_seed
 
 
 def main(seed=42):
@@ -35,6 +28,7 @@ def main(seed=42):
     hit_list = []
 
     best_ndcg = float("-inf")
+
     for epoch in tqdm(range(epochs), desc="Training", total=epochs):
         train_losses.append(trainer.train_epoch_nmf(data_manager.train_loader, data_manager.num_items))
         hr, ndcg = trainer.evaluate(data_manager.valid_loader)

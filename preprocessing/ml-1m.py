@@ -36,6 +36,12 @@ test_df = sorted_ratings[item_rank == 0].copy()
 valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
+
+num_users = full_ratings["UserID"].nunique()
+num_items = full_ratings["ItemID"].nunique()
+
+stats = (num_users, num_items)
+
 # Save data
 nmf_train = train_df[["UserID", "MovieID", "Rating"]].to_numpy()
 with open(BASE_DIR / "data" / out_dir / "nmf" / "train.pkl", "wb") as f:
@@ -46,6 +52,8 @@ with open(BASE_DIR / "data" / out_dir / "nmf" / "valid.pkl", "wb") as f:
 nmf_test  = test_df[["UserID", "MovieID", "Rating"]].to_numpy()
 with open(BASE_DIR / "data" / out_dir / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
+with open(BASE_DIR / "data" / out_dir / "stats.pkl", "wb") as f:
+    pickle.dump(stats, f)
 
 
 
@@ -99,4 +107,7 @@ with open(BASE_DIR / "data" / out_dir / "bert" / "valid.pkl", "wb") as f:
 
 with open(BASE_DIR / "data" / out_dir / "bert" / "test.pkl", "wb") as f:
     pickle.dump((bert_test_sequences, test_user_ids), f)
+
+with open(BASE_DIR / "data" / out_dir / "stats.pkl", "wb") as f:
+    pickle.dump(stats, f)
 

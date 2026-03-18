@@ -1,0 +1,26 @@
+name: quantization
+channels:
+  - defaults
+  - pytorch
+dependencies:
+  - python>=3.10,<3.13
+  - pip
+  - pytorch
+  - torchvision
+  - numpy
+  - pandas
+  - matplotlib
+  - networkx
+  - sympy
+  - jinja2
+
+  - pip:
+      - transformers
+      - huggingface-hub
+      - tokenizers
+      - safetensors
+      - tqdm
+      - rich
+      - typer
+      - omegaconf
+      - bitsandbytes

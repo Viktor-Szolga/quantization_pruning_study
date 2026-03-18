@@ -65,6 +65,12 @@ test_df = sorted_ratings[item_rank == 0].copy()
 valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
+
+num_users = sorted_ratings["UserID"].nunique()
+num_items = sorted_ratings["ItemID"].nunique()
+
+stats = (num_users, num_items)
+
 # Save data
 nmf_train = train_df[["UserID", "ItemID", "Rating"]].to_numpy()
 nmf_valid = valid_df[["UserID", "ItemID", "Rating"]].to_numpy()
@@ -76,7 +82,8 @@ with open(BASE_DIR / "data" / OUT_DIR / "nmf" / "valid.pkl", "wb") as f:
     pickle.dump(nmf_valid, f)
 with open(BASE_DIR / "data" / OUT_DIR / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
-
+with open(BASE_DIR / "data" / OUT_DIR / "stats.pkl", "wb") as f:
+    pickle.dump(stats, f)
 #------------------Bert4Rec-------------
 user_history = sorted_ratings.groupby("UserID")["ItemID"].apply(list).to_dict()
 
@@ -115,3 +122,5 @@ with open(BASE_DIR / "data" / OUT_DIR / "bert" / "valid.pkl", "wb") as f:
     pickle.dump((bert_valid_sequences, valid_user_ids), f)
 with open(BASE_DIR / "data" / OUT_DIR / "bert" / "test.pkl", "wb") as f:
     pickle.dump((bert_test_sequences, test_user_ids), f)
+with open(BASE_DIR / "data" / OUT_DIR / "stats.pkl", "wb") as f:
+    pickle.dump(stats, f)
