@@ -1,5 +1,5 @@
 seed: 42
-device: cpu  # options: "auto", "cpu", "cuda"
+device: auto  # options: "auto", "cpu", "cuda"
 
 dataset:
   name: "beauty"
@@ -12,7 +12,7 @@ model:
     num_layers: 2
     num_heads: 8
     dropout: 0.2
-    # max_sequence_length is inferred from data_manager
+    max_sequence_length: 100
 
 training:
   max_steps: 10000

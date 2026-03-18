@@ -17,13 +17,13 @@ def main(config_path):
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg.training.batch_size)
+    data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg.training.batch_size, cfg.model.params.max_sequence_length)
     match cfg.model.type:
         case "nmf":
             model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=cfg.model.params.latent_mf, latent_mlp=cfg.model.params.latent_mlp, hidden_sizes=cfg.model.params.hidden_sizes)
         case "bert":
             model = Bert4Rec(item_num=data_manager.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
-                    max_sequence_length=data_manager.train_set.max_len, dropout=cfg.model.params.dropout
+                    max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
                 )
 
     if cfg.optimizer.name == "AdamW":
