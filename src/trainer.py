@@ -45,7 +45,7 @@ class RecSysTrainer:
             
         return total_loss / len(loader)
     
-    def train_n_steps_bert(self, train_loader, validation_loader, max_steps, validation_interval=1000, k=10, save_path="bert"):
+    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=1000, k=10, save_path="bert"):
         self.model.train()
         train_losses = []
         val_hr = []
@@ -62,28 +62,34 @@ class RecSysTrainer:
 
             tokens, labels, _ = [b.to(self.device) for b in batch]
 
-            self.optimizer.zero_grad()
-
             logits = self.model(tokens)
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
             
+            loss = loss/accumulation_steps
             loss.backward()
-            self.optimizer.step()
-            if self.scheduler:
-                self.scheduler.step()
+            if (i + 1) % accumulation_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                if self.scheduler:
+                    self.scheduler.step()
             
-            train_losses.append(loss.item())
+            train_losses.append(loss.item() * accumulation_steps)
 
-            if i > 0 and i % validation_interval == 0:
+            if (i + 1) % validation_interval == 0:
                 hr, ndcg = self.evaluate(loader=validation_loader)
                 if ndcg > best_ndcg:
                     best_ndcg = ndcg
                     torch.save(self.model.state_dict(), f"{save_path}.pth")
                 val_hr.append(hr)
                 val_ndcg.append(ndcg)
-                eval_at.append(i)
+                eval_at.append(i+1)
                 self.model.train()
-            
+                
+        if max_steps % accumulation_steps != 0:
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+            if self.scheduler:
+                self.scheduler.step()
         return train_losses, val_hr, val_ndcg, eval_at
         
     def evaluate(self, loader, k=10, performance_per_user=False):

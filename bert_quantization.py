@@ -17,10 +17,12 @@ warnings.filterwarnings(
 )
 import bitsandbytes as bnb
 
-from src.data_manager import MovieLensDataManager
+from src.data_manager import DataManager
 from src.models import Bert4Rec
 from src.trainer import RecSysTrainer
 import torch.nn.functional as F
+from src.utils import set_seed
+from omegaconf import OmegaConf
 
 def prune_embedding(embedding, amount=0.1, unstructured=True):
     if unstructured:
@@ -88,16 +90,14 @@ def get_model_variants(model, quantized_list, named_parameter):
         variants.append(m)
     return variants
 
-def main(path):
+def main(path, cfg):
     result_dicts = []
     prune_model = [False, True]
     for p in prune_model:
-        dm = MovieLensDataManager("bert")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Load base model structure
-        model = Bert4Rec(item_num=dm.num_items, hidden_size=256, num_layers=2, num_heads=8,
-                    max_sequence_length=dm.train_set.max_len, dropout=0.2
-                )
+        dm = DataManager(cfg.model.type, cfg.dataset.name, cfg.training.batch_size, cfg.model.params.max_sequence_length)
+        model = Bert4Rec(item_num=dm.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
+                max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
+            )
         model.load_state_dict(torch.load(path))
         trained_embedding = model.item_embedding
         if p:
@@ -119,9 +119,14 @@ def main(path):
     return result_dicts
 
 if __name__ == "__main__":
+    config_path = "configs/bert/ml-1m.yaml"
+    cfg = OmegaConf.load(config_path)
+    set_seed(cfg.seed)
+    device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
+
     name = "trained_models/bert_model_42.pth"
 
-    results_list = main(name)
+    results_list = main(name, cfg)
 
     type_classifications = ["fp32_np","fp16_np", "int8_np", "fp4_np", "nf4_np", "fp32_p","fp16_p", "int8_p", "fp4_p", "nf4_p"]
 

@@ -3,4 +3,5 @@
 *.pth
 *.json
 *.jsonl
+*.png
 !data/ml-20m/*.csv
