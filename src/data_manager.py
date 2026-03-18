@@ -57,7 +57,7 @@ class MovieLensDataManager:
 
     
 class DataManager:
-    def __init__(self, model_type, dataset):
+    def __init__(self, model_type, dataset, batch_size=128):
         with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "train.pkl", "rb") as f:
             self.train_data = pickle.load(f)
         with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "valid.pkl", "rb") as f:
@@ -77,6 +77,6 @@ class DataManager:
                 self.valid_set = BERTDataset(self.valid_data, all_item_ids=np.arange(1, self.num_items+1), mode="valid", num_negatives=100)
                 self.test_set = BERTDataset(self.test_data, all_item_ids=np.arange(1, self.num_items+1), mode="test", num_negatives=100)
 
-        self.train_loader = DataLoader(self.train_set, batch_size=256, shuffle=True)
-        self.valid_loader = DataLoader(self.valid_set, batch_size=256, shuffle=False)
-        self.test_loader = DataLoader(self.test_set, batch_size=256, shuffle=False)
+        self.train_loader = DataLoader(self.train_set, batch_size=batch_size, shuffle=True)
+        self.valid_loader = DataLoader(self.valid_set, batch_size=batch_size, shuffle=False)
+        self.test_loader = DataLoader(self.test_set, batch_size=batch_size, shuffle=False)
