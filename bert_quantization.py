@@ -50,7 +50,7 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
     trainer = RecSysTrainer(model, None, None, device)
     with torch.amp.autocast("cuda"):
         hr, ndcg, user_hr, user_ndcg = trainer.evaluate(dm.test_loader, performance_per_user=True)
-        
+         
     print(model.item_embedding.weight.dtype)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
     allocated, peak_allocated = print_size(model, dm)
@@ -119,12 +119,12 @@ def main(path, cfg):
     return result_dicts
 
 if __name__ == "__main__":
-    config_path = "configs/bert/ml-1m.yaml"
+    config_path = "configs/bert/ml-20m.yaml"
     cfg = OmegaConf.load(config_path)
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    name = "trained_models/bert_model_42.pth"
+    name = "trained_modelslarge/bert_model_42.pth"
 
     results_list = main(name, cfg)
 

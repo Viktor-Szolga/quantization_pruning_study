@@ -45,7 +45,7 @@ class RecSysTrainer:
             
         return total_loss / len(loader)
     
-    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=1000, k=10, save_path="bert"):
+    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=10000, k=10, save_path="bert"):
         self.model.train()
         train_losses = []
         val_hr = []
@@ -76,7 +76,9 @@ class RecSysTrainer:
             train_losses.append(loss.item() * accumulation_steps)
 
             if (i + 1) % validation_interval == 0:
+                print("eval")
                 hr, ndcg = self.evaluate(loader=validation_loader)
+                print("eval done")
                 if ndcg > best_ndcg:
                     best_ndcg = ndcg
                     torch.save(self.model.state_dict(), f"{save_path}.pth")
@@ -176,7 +178,7 @@ class RecSysTrainer:
             return np.mean(hr_list), np.mean(ndcg_list)
     
     def report_model_size(self):
-        param_size = sum(p.nelement() * p.element_size() for p in self.model.parameters())
+        param_size = sum(p.nelement() * p.element_size() for p in self.model.parameters()) 
         buffer_size = sum(b.nelement() * b.element_size() for b in self.model.buffers())
         size_all_mb = (param_size + buffer_size) / 1024**2
         print(f"Model Size: {size_all_mb:.2f} MB")

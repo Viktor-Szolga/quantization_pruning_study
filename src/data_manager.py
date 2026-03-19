@@ -12,7 +12,7 @@ class MovieLensDataManager:
         if dataset == "ml-1m":
             processing_dir = "processed_ml-1m"
         if dataset == "ml-20m":
-            processing_dir = "processed20"
+            processing_dir = "processed_ml-20"
         with open(ROOT_DIR / "data" / processing_dir / model_type.lower() / "train.pkl", "rb") as f:
             self.train_data = pickle.load(f)
         with open(ROOT_DIR / "data" / processing_dir / model_type.lower() / "valid.pkl", "rb") as f:

@@ -18,10 +18,8 @@ training:
   update_steps: 10000
   warmup_ratio: 0.1
   batch_size: 32
-<<<<<<< HEAD
-=======
   accumulation_steps: 4
->>>>>>> f31e6c882697a05faa81a4a7b2e92e48d067479e
+
 
 optimizer:
   name: AdamW

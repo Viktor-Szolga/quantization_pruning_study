@@ -115,4 +115,5 @@ def main(config_path):
      
 
 if __name__ == "__main__":
-    main("configs/bert/ml-1m.yaml")
+    main("configs/bert/ml-20m.yaml")
+ 
