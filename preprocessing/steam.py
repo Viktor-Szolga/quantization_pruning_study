@@ -5,7 +5,7 @@ from tqdm import tqdm
 import json
 import os
 import ast
-
+import numpy as np
 import gzip
 import shutil
 
@@ -56,6 +56,7 @@ df = df.rename(columns={
 df["UserID"] = df["UserID"].astype("category").cat.codes
 df["ItemID"] = df["ItemID"].astype("category").cat.codes
 
+df["ItemID"] += 1
 #----------------------NeuMF----------------------------
 # LOO
 sorted_ratings = df.sort_values(by=["UserID", "Timestamp"], ascending=True)
@@ -66,10 +67,24 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
-num_users = sorted_ratings["UserID"].max()
-num_items = sorted_ratings["ItemID"].max()
+num_users = sorted_ratings["UserID"].max() + 1
+num_items = sorted_ratings["ItemID"].max() + 1
 
 stats = (num_users, num_items)
+item_counts = df["ItemID"].value_counts().sort_index()
+
+popularity = np.zeros(num_items, dtype=np.float64)
+
+popularity[item_counts.index.values] = item_counts.values
+
+popularity_smooth = popularity ** 0.75
+popularity_smooth = popularity_smooth / popularity_smooth.sum()
+
+with open(BASE_DIR / "data" / OUT_DIR / "popularity.pkl", "wb") as f:
+    pickle.dump({
+        "counts": popularity,
+        "prob": popularity_smooth
+    }, f)
 
 # Save data
 nmf_train = train_df[["UserID", "ItemID", "Rating"]].to_numpy()

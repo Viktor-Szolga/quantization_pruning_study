@@ -84,7 +84,7 @@ class RecSysTrainer:
                 val_ndcg.append(ndcg)
                 eval_at.append(i+1)
                 self.model.train()
-                
+
         if max_steps % accumulation_steps != 0:
             self.optimizer.step()
             self.optimizer.zero_grad()
@@ -144,7 +144,7 @@ class RecSysTrainer:
             ndcg_list = []
 
             with torch.no_grad():
-                for batch in loader:
+                for batch in tqdm(loader, desc="Validating", total=len(loader)):
                     seq, items, users = [b.to(self.device) for b in batch]
 
                     batch_size, num_candidates = items.shape

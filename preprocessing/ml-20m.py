@@ -3,6 +3,7 @@ import pandas as pd
 import pickle
 from tqdm import tqdm
 import os
+import numpy as np
 
 # Constants
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,6 +26,7 @@ full_ratings = pd.read_csv(
         encoding="latin-1"
     ) 
 # -------------------NeuMF-----------------------
+full_ratings["MovieID"] += 1
 # LOO
 sorted_ratings = full_ratings.sort_values(by=["UserID", "Timestamp"], ascending=True)
 
@@ -34,10 +36,24 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
-num_users = full_ratings["UserID"].max()
-num_items = full_ratings["MovieID"].max()
+num_users = full_ratings["UserID"].max() + 1
+num_items = full_ratings["MovieID"].max() + 1
 
 stats = (num_users, num_items)
+item_counts = full_ratings["MovieID"].value_counts().sort_index()
+
+popularity = np.zeros(num_items, dtype=np.float64)
+
+popularity[item_counts.index.values] = item_counts.values
+
+popularity_smooth = popularity ** 0.75
+popularity_smooth = popularity_smooth / popularity_smooth.sum()
+
+with open(BASE_DIR / "data" / out_dir / "popularity.pkl", "wb") as f:
+    pickle.dump({
+        "counts": popularity,
+        "prob": popularity_smooth
+    }, f)
 
 # Save data
 nmf_train = train_df[["UserID", "MovieID", "Rating"]].to_numpy()

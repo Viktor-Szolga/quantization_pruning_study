@@ -65,7 +65,7 @@ def main(config_path):
                 if ndcg > best_ndcg:
                     best_ndcg = ndcg
                     os.makedirs(cfg.saving.save_dir, exist_ok=True)
-                    save_path = Path(cfg.saving.save_dir) / f"{cfg.saving.filename}_{cfg.seed}"
+                    save_path = Path(cfg.saving.save_dir) / f"{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}"
                     torch.save(model.state_dict(), str(save_path))
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}_{cfg.seed}", exist_ok=True)
@@ -93,8 +93,8 @@ def main(config_path):
             hit_list = []
             
             os.makedirs(cfg.saving.save_dir, exist_ok=True)
-            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, accumulation_steps=cfg.training.accumulation_steps,
-                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.seed}")
+            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, accumulation_steps=cfg.training.accumulation_steps, validation_interval=cfg.evaluation.interval,
+                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}")
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
@@ -112,7 +112,8 @@ def main(config_path):
             plt.title("NDCG")
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
             plt.close()
+            print(max(ndcg_list))
     
 
 if __name__ == "__main__":
-    main("configs/bert/ml-1m.yaml")
+    main("configs/bert/beauty.yaml")
