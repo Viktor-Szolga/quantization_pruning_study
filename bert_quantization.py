@@ -47,6 +47,16 @@ def print_size(model, dm, device="cuda" if torch.cuda.is_available() else "cpu")
 
 def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "cpu"):
     print(f"Number of neurons in embedding: {model.item_embedding.weight.numel()}")
+
+    model.to(device)
+    for param in model.parameters():
+        if isinstance(param, bnb.nn.Params4bit):
+            param.data = param.data.to(device)
+            # This specific call triggers the internal 'quantized' state
+            if hasattr(param, "quant_state"):
+                param.quant_state.to(device)
+
+
     trainer = RecSysTrainer(model, None, None, device)
     with torch.amp.autocast("cuda"):
         hr, ndcg, user_hr, user_ndcg = trainer.evaluate(dm.test_loader, performance_per_user=True)
@@ -82,10 +92,13 @@ def get_quantized_embeddings(embedding, device = "cuda" if torch.cuda.is_availab
     return quantized
 
 
-def get_model_variants(model, quantized_list, named_parameter):
+def get_model_variants(dm, quantized_list, named_parameter, path):
     variants = []
     for value in quantized_list:
-        m = copy.deepcopy(model)
+        m = Bert4Rec(item_num=dm.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
+                max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
+            )
+        m.load_state_dict(torch.load(path))
         setattr(m, named_parameter, value)
         variants.append(m)
     return variants
@@ -106,7 +119,7 @@ def main(path, cfg):
 
         test_embedding = nn.Embedding(100000, 10000)
         test_embeddings = get_quantized_embeddings(test_embedding)
-        models = get_model_variants(model, get_quantized_embeddings(trained_embedding), "item_embedding")
+        models = get_model_variants(dm, get_quantized_embeddings(trained_embedding), "item_embedding", path)
 
         for m, test_embedding in zip(models, test_embeddings):
             m.test_embedding = test_embedding
@@ -124,7 +137,7 @@ if __name__ == "__main__":
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    name = "trained_models/bert_model_42.pth"
+    name = "trained_models/bert_model_ml-1m_42.pth"
 
     results_list = main(name, cfg)
 

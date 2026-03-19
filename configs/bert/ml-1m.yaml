@@ -38,6 +38,7 @@ data:
   model_type: bert
 
 evaluation:
+  interval: 1000
   metrics:
     - hit_rate
     - ndcg

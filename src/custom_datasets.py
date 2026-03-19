@@ -25,7 +25,7 @@ class NMFDatset(Dataset):
 
 
 class BERTDataset(Dataset):
-    def __init__(self, data, max_len=200, num_items=3706, mask_prob=0.2, mode='train', all_item_ids=None, num_negatives=0):
+    def __init__(self, data, prob, max_len=200, num_items=3706, mask_prob=0.2, mode='train', all_item_ids=None, num_negatives=0):
         """
         data: List of dicts like [{'seq': [...], 'target': 1907}, ...]
         mode: 'train', 'valid', or 'test'
@@ -39,6 +39,7 @@ class BERTDataset(Dataset):
         self.mode = mode
         self.all_item_ids = all_item_ids
         self.num_negatives = num_negatives
+        self.prob = prob
 
     def __len__(self):
         return len(self.data)
@@ -52,6 +53,7 @@ class BERTDataset(Dataset):
             seq = item["seq"]
             target = item["target"]
 
+            """
             # sample negatives
             neg_items = np.random.choice(
                 self.all_item_ids,
@@ -59,6 +61,32 @@ class BERTDataset(Dataset):
                 replace=False
             )
 
+            """
+            if isinstance(target, (list, np.ndarray)):
+                target = target[0]
+            target = int(target)
+
+            # build user interaction set
+            user_items = set(seq)
+            user_items.add(target)
+            mask = np.ones(len(self.all_item_ids), dtype=bool)
+
+            # shift indices
+            user_items = np.array(list(user_items)) - 1
+            mask[user_items] = False
+            filtered_ids = self.all_item_ids[mask]
+            filtered_prob = self.prob[1:][mask]
+
+            # renormalize probabilities
+            filtered_prob = filtered_prob / filtered_prob.sum()
+
+            # sample negatives
+            neg_items = np.random.choice(
+                filtered_ids,
+                size=self.num_negatives,
+                replace=False,
+                p=filtered_prob
+            )
             items = torch.LongTensor([target] + neg_items.tolist())
 
             # append mask
