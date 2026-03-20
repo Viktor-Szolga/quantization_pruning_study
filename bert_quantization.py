@@ -132,7 +132,7 @@ def main(path, cfg):
     return result_dicts
 
 if __name__ == "__main__":
-    dataset = "ml-1m"
+    dataset = "beauty"
     config_path = f"configs/bert/{dataset}.yaml"
     name = f"trained_models/bert_model_{dataset}_42.pth"
 
