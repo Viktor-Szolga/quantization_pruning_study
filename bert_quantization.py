@@ -96,7 +96,7 @@ def get_model_variants(dm, quantized_list, named_parameter, path):
     variants = []
     for value in quantized_list:
         m = Bert4Rec(item_num=dm.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
-                max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
+                max_sequence_length=cfg.model.params.max_sequence_length, hidden_dropout=cfg.model.params.hidden_dropout, attention_dropout=cfg.model.params.attention_dropout
             )
         m.load_state_dict(torch.load(path))
         setattr(m, named_parameter, value)
@@ -109,7 +109,7 @@ def main(path, cfg):
     for p in prune_model:
         dm = DataManager(cfg.model.type, cfg.dataset.name, cfg.training.batch_size, cfg.model.params.max_sequence_length)
         model = Bert4Rec(item_num=dm.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
-                max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
+                max_sequence_length=cfg.model.params.max_sequence_length, hidden_dropout=cfg.model.params.hidden_dropout, attention_dropout=cfg.model.params.attention_dropout
             )
         model.load_state_dict(torch.load(path))
         trained_embedding = model.item_embedding
@@ -132,12 +132,14 @@ def main(path, cfg):
     return result_dicts
 
 if __name__ == "__main__":
-    config_path = "configs/bert/ml-1m.yaml"
+    dataset = "ml-1m"
+    config_path = f"configs/bert/{dataset}.yaml"
+    name = f"trained_models/bert_model_{dataset}_42.pth"
+
     cfg = OmegaConf.load(config_path)
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    name = "trained_models/bert_model_ml-1m_42.pth"
 
     results_list = main(name, cfg)
 

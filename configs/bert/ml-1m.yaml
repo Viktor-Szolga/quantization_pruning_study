@@ -1,5 +1,5 @@
 seed: 42
-device: auto  # options: "auto", "cpu", "cuda"
+device: auto
 
 dataset:
   name: "ml-1m"
@@ -8,22 +8,24 @@ model:
   type: bert
   name: Bert4Rec
   params:
-    hidden_size: 256
+    hidden_size: 384
     num_layers: 2
-    num_heads: 8
-    dropout: 0.2
-    max_sequence_length: 50
+    num_heads: 6
+    hidden_dropout: 0.5
+    attention_dropout: 0.3
+    max_sequence_length: 25
 
 training:
-  update_steps: 10000
+  update_steps: 40000
   warmup_ratio: 0.1
-  batch_size: 64
-  accumulation_steps: 4
+  batch_size: 256
+  accumulation_steps: 1
+  early_stopping_patience: 6
 
 optimizer:
   name: AdamW
-  lr: 0.001
-  weight_decay: 0.01
+  lr: 0.0003
+  weight_decay: 0.02
 
 scheduler:
   name: linear_with_warmup
@@ -38,7 +40,7 @@ data:
   model_type: bert
 
 evaluation:
-  interval: 1000
+  interval: 250
   metrics:
     - hit_rate
     - ndcg

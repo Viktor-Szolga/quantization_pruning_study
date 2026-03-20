@@ -45,7 +45,7 @@ class RecSysTrainer:
             
         return total_loss / len(loader)
     
-    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=1000, k=10, save_path="bert"):
+    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=1000, k=10, save_path="bert", cfg=None):
         self.model.train()
         train_losses = []
         val_hr = []
@@ -53,6 +53,7 @@ class RecSysTrainer:
         eval_at = []
         train_iter = iter(train_loader)
         best_ndcg = float("-inf")
+        patience_counter = 0
         for i in tqdm(range(max_steps), desc="Training", total=max_steps):
             try:
                 batch = next(train_iter)
@@ -75,15 +76,21 @@ class RecSysTrainer:
             
             train_losses.append(loss.item() * accumulation_steps)
 
-            if (i + 1) % validation_interval == 0:
+            if (i + 1) % (validation_interval*accumulation_steps) == 0:
                 hr, ndcg = self.evaluate(loader=validation_loader)
                 if ndcg > best_ndcg:
                     best_ndcg = ndcg
                     torch.save(self.model.state_dict(), f"{save_path}.pth")
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
                 val_hr.append(hr)
                 val_ndcg.append(ndcg)
                 eval_at.append(i+1)
                 self.model.train()
+                if patience_counter >= cfg.training.early_stopping_patience:
+                    print(f"Early stopping at step {i + 1} (no improvement for {cfg.training.early_stopping_patience} evaluations)")
+                    break
 
         if max_steps % accumulation_steps != 0:
             self.optimizer.step()

@@ -99,16 +99,16 @@ class NeuralMF(nn.Module):
 
 
 class Bert4Rec(nn.Module):
-    def __init__(self, item_num, hidden_size, num_layers, num_heads, max_sequence_length, dropout=0.1):
+    def __init__(self, item_num, hidden_size, num_layers, num_heads, max_sequence_length, hidden_dropout=0.5, attention_dropout=0.2):
         super().__init__()
         self.item_embedding = nn.Embedding(item_num + 2, hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(max_sequence_length, hidden_size)
 
         self.layer_norm = nn.LayerNorm(hidden_size, eps=1e-12)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(hidden_dropout)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_size, nhead=num_heads, batch_first=True, dim_feedforward=hidden_size * 4, dropout=dropout, activation="gelu"
+            d_model=hidden_size, nhead=num_heads, batch_first=True, dim_feedforward=hidden_size * 4, dropout=attention_dropout, activation="gelu"
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.output_layer = nn.Linear(hidden_size, item_num + 2)
