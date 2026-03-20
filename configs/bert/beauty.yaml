@@ -1,5 +1,5 @@
 seed: 42
-device: auto  # options: "auto", "cpu", "cuda"
+device: auto
 
 dataset:
   name: "beauty"
@@ -8,22 +8,24 @@ model:
   type: bert
   name: Bert4Rec
   params:
-    hidden_size: 256
-    num_layers: 2
-    num_heads: 8
-    dropout: 0.2
-    max_sequence_length: 50
+    hidden_size: 128
+    num_layers: 1
+    num_heads: 4
+    hidden_dropout: 0.5
+    attention_dropout: 0.2
+    max_sequence_length: 25
 
 training:
-  update_steps: 10000
+  update_steps: 20000
   warmup_ratio: 0.1
   batch_size: 64
-  accumulation_steps: 4
+  accumulation_steps: 2
+  early_stopping_patience: 5
 
 optimizer:
   name: AdamW
-  lr: 0.001
-  weight_decay: 0.01
+  lr: 0.0002
+  weight_decay: 0.001
 
 scheduler:
   name: linear_with_warmup
@@ -38,7 +40,7 @@ data:
   model_type: bert
 
 evaluation:
-  interval: 8000
+  interval: 250
   metrics:
     - hit_rate
     - ndcg

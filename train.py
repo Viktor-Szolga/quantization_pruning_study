@@ -25,8 +25,7 @@ def main(config_path):
             model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=cfg.model.params.latent_mf, latent_mlp=cfg.model.params.latent_mlp, hidden_sizes=cfg.model.params.hidden_sizes)
         case "bert":
             model = Bert4Rec(item_num=data_manager.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
-                    max_sequence_length=cfg.model.params.max_sequence_length, dropout=cfg.model.params.dropout
-                )
+                    max_sequence_length=cfg.model.params.max_sequence_length, hidden_dropout=cfg.model.params.hidden_dropout, attention_dropout=cfg.model.params.attention_dropout)
 
     if cfg.optimizer.name == "AdamW":
         optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.optimizer.lr, weight_decay=cfg.optimizer.weight_decay)
@@ -94,11 +93,11 @@ def main(config_path):
             
             os.makedirs(cfg.saving.save_dir, exist_ok=True)
             train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, accumulation_steps=cfg.training.accumulation_steps, validation_interval=cfg.evaluation.interval,
-                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}")
+                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}", cfg=cfg)
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
-            plt.plot(range(cfg.training.update_steps*cfg.training.accumulation_steps), train_losses, label="Train")
+            plt.plot(range(eval_at[-1]), train_losses, label="Train")
             plt.title("Train loss")
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{cfg.seed}.png")
             plt.close()
@@ -116,4 +115,4 @@ def main(config_path):
     
 
 if __name__ == "__main__":
-    main("configs/bert/beauty.yaml")
+    main("configs/bert/ml-1m.yaml")

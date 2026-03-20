@@ -2,30 +2,30 @@ seed: 42
 device: auto
 
 dataset:
-  name: "steam"
+  name: "ml-1m"
 
 model:
   type: bert
   name: Bert4Rec
   params:
-    hidden_size: 128
+    hidden_size: 256
     num_layers: 2
     num_heads: 4
-    hidden_dropout: 0.5
-    attention_dropout: 0.2
+    hidden_dropout: 0.6
+    attention_dropout: 0.4
     max_sequence_length: 25
 
 training:
-  update_steps: 50000
+  update_steps: 30000
   warmup_ratio: 0.1
-  batch_size: 128
-  accumulation_steps: 2
-  early_stopping_patience: 10
+  batch_size: 256
+  accumulation_steps: 1
+  early_stopping_patience: 5
 
 optimizer:
   name: AdamW
-  lr: 0.0002
-  weight_decay: 0.001
+  lr: 0.0005
+  weight_decay: 0.05
 
 scheduler:
   name: linear_with_warmup
@@ -40,7 +40,7 @@ data:
   model_type: bert
 
 evaluation:
-  interval: 1000
+  interval: 250
   metrics:
     - hit_rate
     - ndcg

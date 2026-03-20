@@ -26,6 +26,7 @@ full_ratings = pd.read_csv(
     names=["UserID", "MovieID", "Rating", "Timestamp"],
     encoding="latin-1"
 )    
+
 print(full_ratings.head())
 full_ratings["MovieID"] += 1
 # -------------------NeuMF-----------------------
@@ -85,7 +86,7 @@ test_user_ids = []
 
 for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(user_history)):
     # Users need at least 3 interactions
-    if len(items) < 3:
+    if len(items) < 5:
         continue
     
     # Bert uses zero based user ids be careful when remapping to users during data analysis

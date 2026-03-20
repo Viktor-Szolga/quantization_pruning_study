@@ -11,7 +11,8 @@ model:
     hidden_size: 256
     num_layers: 2
     num_heads: 8
-    dropout: 0.2
+    hidden_dropout: 0.2
+    attention_dropout: 0.2
     max_sequence_length: 50
 
 training:
@@ -19,6 +20,7 @@ training:
   warmup_ratio: 0.1
   batch_size: 32
   accumulation_steps: 8
+  early_stopping_patience: 3
 
 optimizer:
   name: AdamW
