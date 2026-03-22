@@ -82,7 +82,7 @@ class RecSysTrainer:
                     best_ndcg = ndcg
                     torch.save(self.model.state_dict(), f"{save_path}.pth")
                     patience_counter = 0
-                else:
+                elif i > cfg.training.update_steps*cfg.training.warmup_ratio:
                     patience_counter += 1
                 val_hr.append(hr)
                 val_ndcg.append(ndcg)
