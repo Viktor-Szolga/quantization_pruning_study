@@ -10,7 +10,8 @@ from pathlib import Path
 from transformers import get_linear_schedule_with_warmup
 import os
 from omegaconf import OmegaConf
-from src.utils import set_seed    
+from src.utils import set_seed
+import argparse    
 import warnings
 warnings.filterwarnings("ignore", message="The PyTorch API of nested tensors")
 
@@ -115,4 +116,13 @@ def main(config_path):
     
 
 if __name__ == "__main__":
-    main("configs/bert/ml-20m.yaml")
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-d", "--dataset",
+        type=str,
+        default="ml-1m",
+        help="Dataset name (one of 'ml-1m', 'ml-20m', 'beauty', 'steam')"
+    )
+    args = parser.parse_args()
+    main(f"configs/bert/{args.dataset}.yaml")

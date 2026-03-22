@@ -54,7 +54,7 @@ class RecSysTrainer:
         train_iter = iter(train_loader)
         best_ndcg = float("-inf")
         patience_counter = 0
-        for i in tqdm(range(max_steps), desc="Training", total=max_steps):
+        for i in tqdm(range(max_steps), desc=f"Training {cfg.dataset.name}", total=max_steps):
             try:
                 batch = next(train_iter)
             except StopIteration:
