@@ -2,7 +2,7 @@ seed: 42
 device: auto
 
 dataset:
-  name: "ml-1m"
+  name: "beauty"
 
 model:
   type: bert
@@ -16,15 +16,15 @@ model:
     max_sequence_length: 20
 
 training:
-  update_steps: 25000
+  update_steps: 50000
   warmup_ratio: 0.1
-  batch_size: 256
-  accumulation_steps: 1
+  batch_size: 128
+  accumulation_steps: 2
   early_stopping_patience: 5
 
 optimizer:
   name: AdamW
-  lr: 0.0003
+  lr: 0.0005
   weight_decay: 0.005
 
 scheduler:
