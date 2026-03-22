@@ -28,9 +28,14 @@ df = df.rename(columns={
     "timestamp": "Timestamp"
 })[["UserID", "ItemID", "Rating", "Timestamp"]]
 
-df["UserID"] = df["UserID"].astype("category").cat.codes
-df["ItemID"] = df["ItemID"].astype("category").cat.codes
-df["ItemID"] += 1
+df["UserID"] = df["UserID"].astype("category").cat.codes + 1
+df["ItemID"] = df["ItemID"].astype("category").cat.codes + 1
+
+# Stable item mapping like ml-1m
+unique_items = sorted(df["ItemID"].unique())
+print(min(unique_items))
+item2id = {item: idx + 1 for idx, item in enumerate(unique_items)}
+df["ItemID"] = df["ItemID"].map(item2id)
 
 #----------------------NeuMF----------------------------
 # LOO
@@ -46,17 +51,18 @@ nmf_train = train_df[["UserID", "ItemID", "Rating"]].to_numpy()
 nmf_valid = valid_df[["UserID", "ItemID", "Rating"]].to_numpy()
 nmf_test  = test_df[["UserID", "ItemID", "Rating"]].to_numpy()
 
-num_users = df["UserID"].max() + 1
-num_items = df["ItemID"].max() + 1
+num_users = df["UserID"].max()
+num_items = len(unique_items)
 
 stats = (num_users, num_items)
-item_counts = df["ItemID"].value_counts().sort_index()
 
-popularity = np.zeros(num_items, dtype=np.float64)
+item_counts = train_df["ItemID"].value_counts()
 
-popularity[item_counts.index.values] = item_counts.values
+popularity = np.zeros(num_items + 1, dtype=np.float64)  # index 0 = padding
+for item_id, count in item_counts.items():
+    popularity[item_id] = count
 
-popularity_smooth = popularity ** 0.75
+popularity_smooth = popularity #** 0.75
 popularity_smooth = popularity_smooth / popularity_smooth.sum()
 
 with open(BASE_DIR / "data" / OUT_DIR / "popularity.pkl", "wb") as f:
@@ -87,11 +93,11 @@ test_user_ids = []
 
 
 for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(user_history)):
-    # Need at least 3 interactions
+    # Need at least 5 interactions
     if len(items) < 5:
         continue
-    
-    uid = int(user_id)
+
+    uid = int(user_id) - 1
 
     # Train
     bert_train_sequences[uid] = {"seq": items[:-2]}

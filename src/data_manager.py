@@ -75,9 +75,9 @@ class DataManager:
                 self.valid_set = NMFDatset(self.valid_data, all_item_ids=np.arange(1, self.num_items), num_negatives=100)
                 self.test_set = NMFDatset(self.test_data, all_item_ids=np.arange(1, self.num_items), num_negatives=100)
             case "BERT":
-                self.train_set = BERTDataset(self.train_data, prob=self.popularity["prob"], mode="train", max_len=max_sequence_length)
-                self.valid_set = BERTDataset(self.valid_data, prob=self.popularity["prob"], all_item_ids=np.arange(1, self.num_items), mode="valid", num_negatives=100, max_len=max_sequence_length)
-                self.test_set = BERTDataset(self.test_data, prob=self.popularity["prob"], all_item_ids=np.arange(1, self.num_items), mode="test", num_negatives=100, max_len=max_sequence_length)
+                self.train_set = BERTDataset(self.train_data, prob=self.popularity["prob"], num_items=self.num_items, mode="train", max_len=max_sequence_length)
+                self.valid_set = BERTDataset(self.valid_data, prob=self.popularity["prob"], num_items=self.num_items, all_item_ids=np.arange(1, self.num_items), mode="valid", num_negatives=100, max_len=max_sequence_length)
+                self.test_set = BERTDataset(self.test_data, prob=self.popularity["prob"], num_items=self.num_items, all_item_ids=np.arange(1, self.num_items), mode="test", num_negatives=100, max_len=max_sequence_length)
 
         self.train_loader = DataLoader(self.train_set, batch_size=batch_size, shuffle=True)
         self.valid_loader = DataLoader(self.valid_set, batch_size=batch_size, shuffle=False)
