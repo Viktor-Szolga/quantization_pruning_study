@@ -28,7 +28,10 @@ full_ratings = pd.read_csv(
 )    
 
 print(full_ratings.head())
-full_ratings["MovieID"] += 1
+unique_items = sorted(full_ratings["MovieID"].unique())
+item2id = {item: idx + 1 for idx, item in enumerate(unique_items)}
+print(min(unique_items))
+full_ratings["MovieID"] = full_ratings["MovieID"].map(item2id)
 # -------------------NeuMF-----------------------
 # LOO
 sorted_ratings = full_ratings.sort_values(by=["UserID", "Timestamp"], ascending=True)
@@ -39,18 +42,21 @@ valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
 
-num_users = full_ratings["UserID"].max() + 1
-num_items = full_ratings["MovieID"].max() + 1
-
+print(full_ratings["UserID"].min())
+print(full_ratings["MovieID"].min())
+num_users = full_ratings["UserID"].max()
+num_items = len(unique_items) 
 stats = (num_users, num_items)
-item_counts = full_ratings["MovieID"].value_counts().sort_index()
 
-popularity = np.zeros(num_items, dtype=np.float64)
 
-popularity[item_counts.index.values] = item_counts.values
+item_counts = train_df["MovieID"].value_counts()
+popularity = np.zeros(num_items + 1, dtype=np.float64)  # index 0 = padding
+for item_id, count in item_counts.items():
+    popularity[item_id] = count
 
-popularity_smooth = popularity ** 0.75
+popularity_smooth = popularity #** 0.75
 popularity_smooth = popularity_smooth / popularity_smooth.sum()
+
 
 with open(BASE_DIR / "data" / out_dir / "popularity.pkl", "wb") as f:
     pickle.dump({
@@ -85,11 +91,10 @@ valid_user_ids = []
 test_user_ids = []
 
 for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(user_history)):
-    # Users need at least 3 interactions
+    # Users need at least 5 interactions
     if len(items) < 5:
         continue
     
-    # Bert uses zero based user ids be careful when remapping to users during data analysis
     uid = int(user_id) - 1
 
     # Train
