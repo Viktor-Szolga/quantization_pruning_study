@@ -5,6 +5,9 @@ from tqdm import tqdm
 import os
 import numpy as np
 
+import random
+np.random.seed(42)
+random.seed(42)
 # Constants
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATASET = "ml-1m"

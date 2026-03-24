@@ -8,6 +8,9 @@ import ast
 import numpy as np
 import gzip
 import shutil
+import random
+np.random.seed(42)
+random.seed(42)
 
 # Constants
 BASE_DIR = Path(__file__).resolve().parent.parent

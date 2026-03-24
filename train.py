@@ -15,9 +15,9 @@ import argparse
 import warnings
 warnings.filterwarnings("ignore", message="The PyTorch API of nested tensors")
 
-def main(config_path):
+def main(config_path, seed):
     cfg = OmegaConf.load(config_path)
-    set_seed(cfg.seed)
+    set_seed(seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
     data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg, cfg.training.batch_size, cfg.model.params.get("max_sequence_length", 0), smooth_popularity=cfg.training.get("smooth_popularity", False))
@@ -70,24 +70,24 @@ def main(config_path):
             train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_nmf(
                 data_manager.train_loader, data_manager.valid_loader, data_manager.num_items, cfg, 
                 item_popularity=torch.tensor(data_manager.popularity["prob"], dtype=torch.float32),
-                save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}",
+                save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}",
                 max_norm=cfg.training.max_norm)
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
             plt.plot(range(eval_at[-1]), train_losses, label="Train")
             plt.title("Train loss")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{cfg.seed}.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{seed}.png")
             plt.close()
 
             plt.plot(eval_at, hit_list, label="HR")
             plt.title("HR")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{cfg.seed}.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{seed}.png")
             plt.close()
 
             plt.plot(eval_at, ndcg_list, label="NDCG")
             plt.title("NDCG")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{seed}.png")
             plt.close()
         case "bert":
             criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
@@ -99,23 +99,23 @@ def main(config_path):
             
             os.makedirs(cfg.saving.save_dir, exist_ok=True)
             train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, accumulation_steps=cfg.training.accumulation_steps, validation_interval=cfg.evaluation.interval,
-                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}", cfg=cfg)
+                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}", cfg=cfg)
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
             plt.plot(range(eval_at[-1]), train_losses, label="Train")
             plt.title("Train loss")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{cfg.seed}.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{seed}.png")
             plt.close()
 
             plt.plot(eval_at, hit_list, label="HR")
             plt.title("HR")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{cfg.seed}.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{seed}.png")
             plt.close()
 
             plt.plot(eval_at, ndcg_list, label="NDCG")
             plt.title("NDCG")
-            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
+            plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{seed}.png")
             plt.close()
             print(max(ndcg_list))
     print("Performance on test:")
@@ -137,5 +137,11 @@ if __name__ == "__main__":
         default="nmf",
         help="Model type (one of 'bert', 'nmf')"
     )
+    parser.add_argument(
+        "-s", "--seed",
+        type=int,
+        default=None,
+        help="Model type (one of 'bert', 'nmf')"
+    )
     args = parser.parse_args()
-    main(f"configs/{args.model}/{args.dataset}.yaml")
+    main(f"configs/{args.model}/{args.dataset}.yaml", args.seed)
