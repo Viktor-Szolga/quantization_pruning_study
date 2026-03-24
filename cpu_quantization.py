@@ -260,7 +260,7 @@ def main_full_quant_study(path, cfg):
     return results
 
 if __name__ == "__main__":
-    dataset = "steam" 
+    dataset = "ml-1m" 
     cfg = OmegaConf.load(f"configs/bert/{dataset}.yaml")
     set_seed(cfg.seed)
     

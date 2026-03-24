@@ -27,11 +27,16 @@ full_ratings = pd.read_csv(
     encoding="latin-1"
 )    
 
+user_counts = full_ratings["UserID"].value_counts()
+full_ratings = full_ratings[full_ratings["UserID"].isin(user_counts[user_counts >= 5].index)]
+full_ratings = full_ratings.drop_duplicates(subset=["UserID", "MovieID"], keep="first")
+
 print(full_ratings.head())
 unique_items = sorted(full_ratings["MovieID"].unique())
 item2id = {item: idx + 1 for idx, item in enumerate(unique_items)}
 print(min(unique_items))
 full_ratings["MovieID"] = full_ratings["MovieID"].map(item2id)
+
 # -------------------NeuMF-----------------------
 # LOO
 sorted_ratings = full_ratings.sort_values(by=["UserID", "Timestamp"], ascending=True)
@@ -57,11 +62,17 @@ for item_id, count in item_counts.items():
 popularity_smooth = popularity #** 0.75
 popularity_smooth = popularity_smooth / popularity_smooth.sum()
 
+user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
+user_item_set = {
+    int(user_id): set(items)
+    for user_id, items in user_history.items()
+}
 
 with open(BASE_DIR / "data" / out_dir / "popularity.pkl", "wb") as f:
     pickle.dump({
         "counts": popularity,
-        "prob": popularity_smooth
+        "prob": popularity_smooth,
+        "user_item_set": user_item_set
     }, f)
 
 # Save data

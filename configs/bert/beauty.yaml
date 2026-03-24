@@ -35,10 +35,6 @@ loss:
   params:
     ignore_index: 0
 
-data:
-  dataset: MovieLens
-  model_type: bert
-
 evaluation:
   interval: 500
   metrics:

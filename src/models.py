@@ -135,3 +135,107 @@ class Bert4Rec(nn.Module):
         x = self.encoder(x, src_key_padding_mask=mask)
         return self.output_layer(x)
 
+
+class NeuMF(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim_mf, latent_dim_mlp, hidden_sizes=[64, 32, 16], dropout_prob=0.5):
+        super(NeuMF, self).__init__()
+        self.embed_user_GMF = nn.Embedding(num_users, latent_dim_mf)
+        self.embed_item_GMF = nn.Embedding(num_items, latent_dim_mf)
+
+        self.embed_user_MLP = nn.Embedding(num_users, latent_dim_mlp)
+        self.embed_item_MLP = nn.Embedding(num_items, latent_dim_mlp)
+        
+        input_size = latent_dim_mlp * 2
+        modules = []
+        for h_size in hidden_sizes:
+            modules.append(nn.Linear(input_size, h_size))
+            modules.append(nn.Dropout(dropout_prob))
+            modules.append(nn.ReLU())
+            input_size = h_size
+        self.mlp_network = nn.Sequential(*modules)
+
+        self.prediction_layer = nn.Linear(latent_dim_mf + hidden_sizes[-1], 1, bias=True)
+        self.sigmoid = nn.Sigmoid()
+
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.normal_(self.embed_user_GMF.weight, std=0.01)
+        nn.init.normal_(self.embed_item_GMF.weight, std=0.01)
+        nn.init.normal_(self.embed_user_MLP.weight, std=0.01)
+        nn.init.normal_(self.embed_item_MLP.weight, std=0.01)
+
+        for m in self.mlp_network:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+        
+        nn.init.xavier_uniform_(self.prediction_layer.weight)
+        if self.prediction_layer.bias is not None:
+            nn.init.zeros_(self.prediction_layer.bias)
+
+    def forward(self, user_indices, item_indices):
+        user_gmf = self.embed_user_GMF(user_indices)
+        item_gmf = self.embed_item_GMF(item_indices)
+        mf_vector = torch.mul(user_gmf, item_gmf)
+
+        user_mlp = self.embed_user_MLP(user_indices)
+        item_mlp = self.embed_item_MLP(item_indices)
+        mlp_vector = torch.cat([user_mlp, item_mlp], dim=-1)
+        mlp_vector = self.mlp_network(mlp_vector)
+
+        combined_vector = torch.cat([mf_vector, mlp_vector], dim=-1)
+        
+        prediction = self.prediction_layer(combined_vector)
+        return prediction.view(-1)
+    
+
+
+
+
+class GMF(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim):
+        super().__init__()
+        self.embed_user = nn.Embedding(num_users + 1, latent_dim)
+        self.embed_item = nn.Embedding(num_items + 1, latent_dim)
+        self.prediction = nn.Linear(latent_dim, 1)
+
+        nn.init.normal_(self.embed_user.weight, std=0.01)
+        nn.init.normal_(self.embed_item.weight, std=0.01)
+        nn.init.kaiming_uniform_(self.prediction.weight, a=1, nonlinearity='sigmoid')
+
+    def forward(self, users, items):
+        u = self.embed_user(users)
+        i = self.embed_item(items)
+        vec = u * i               # element-wise multiply
+        return self.prediction(vec).view(-1)
+    
+
+class MLP(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim, hidden_sizes=[128,64]):
+        super().__init__()
+        self.embed_user = nn.Embedding(num_users + 1, latent_dim)
+        self.embed_item = nn.Embedding(num_items + 1, latent_dim)
+
+        input_size = latent_dim * 2
+        layers = []
+        for h in hidden_sizes:
+            layers.append(nn.Linear(input_size, h))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(0.1))   # optional
+            input_size = h
+        self.mlp = nn.Sequential(*layers)
+        self.prediction = nn.Linear(hidden_sizes[-1], 1)
+
+        nn.init.normal_(self.embed_user.weight, std=0.01)
+        nn.init.normal_(self.embed_item.weight, std=0.01)
+        for m in self.mlp:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+        nn.init.kaiming_uniform_(self.prediction.weight, a=1, nonlinearity='sigmoid')
+
+    def forward(self, users, items):
+        u = self.embed_user(users)
+        i = self.embed_item(items)
+        x = torch.cat([u, i], dim=-1)
+        x = self.mlp(x)
+        return self.prediction(x).view(-1)

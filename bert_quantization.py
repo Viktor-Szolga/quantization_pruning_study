@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import copy
 import time
-from bitsandbytes.nn import Embedding4bit, Embedding8bit, Linear4bit
+from bitsandbytes.nn import Embedding4bit, Embedding8bit, EmbeddingNF4
 import copy
 import torch.nn as nn
 import os
@@ -11,10 +11,6 @@ import gc
 import pandas as pd
 import warnings
 import pickle
-warnings.filterwarnings(
-    "ignore",
-    message="Embedding size .* is not divisible by block size"
-)
 import bitsandbytes as bnb
 
 from src.data_manager import DataManager
@@ -62,6 +58,7 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
         hr, ndcg, user_hr, user_ndcg = trainer.evaluate(dm.test_loader, performance_per_user=True)
         
     print(model.item_embedding.weight.dtype)
+    print(model.item_embedding.weight.shape)
     print(f"NDCG: {ndcg:.4f} | HR: {hr:.4f}")
     allocated, peak_allocated = print_size(model, dm)
     print(f"---"*10)
@@ -71,7 +68,8 @@ def evaluate_model(model, dm, device="cuda" if torch.cuda.is_available() else "c
         "user_hr": user_hr,
         "user_ndcg": user_ndcg,
         "allocated": allocated,
-        "peak_allocated": peak_allocated
+        "peak_allocated": peak_allocated,
+        "embedding_size": model.item_embedding.weight.shape
     }
 
 
@@ -117,7 +115,7 @@ def main(path, cfg):
             trained_embedding = prune_embedding(trained_embedding)
 
 
-        test_embedding = nn.Embedding(100000, 10000)
+        test_embedding = nn.Embedding(64000, 6400)
         test_embeddings = get_quantized_embeddings(test_embedding)
         models = get_model_variants(dm, get_quantized_embeddings(trained_embedding), "item_embedding", path)
 
@@ -132,7 +130,7 @@ def main(path, cfg):
     return result_dicts
 
 if __name__ == "__main__":
-    dataset = "ml-20m"
+    dataset = "ml-1m"
     config_path = f"configs/bert/{dataset}.yaml"
     name = f"trained_models/bert_model_{dataset}_42.pth"
 

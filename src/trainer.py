@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from src.models import NeuralMF
+from src.models import NeuralMF, NeuMF
 from tqdm import tqdm
 from pathlib import Path
 import os
@@ -15,28 +15,29 @@ class RecSysTrainer:
 
     def load_state_dict(self, path):
         self.model.load_state_dict(torch.load(path, weights_only=True))
-        
-    def train_epoch_nmf(self, loader, num_items):
+    """
+    def train_epoch_nmf(self, loader, num_items, cfg):
         self.model.train()
         total_loss = 0
 
         for batch in loader:
             users, pos_items, _ = [b.to(self.device) for b in batch]
             batch_size = users.size(0)
+            neg_count = batch_size * cfg.training.negative_ratio
 
-            neg_items = torch.randint(0, num_items, (batch_size,)).to(self.device)
-
-            all_users = torch.cat([users, users], dim=0)
+            neg_items = torch.randint(0, num_items, (neg_count,)).to(self.device)
+            neg_users = users.repeat_interleave(cfg.training.negative_ratio)
+            
+            all_users = torch.cat([users, neg_users], dim=0)
             all_items = torch.cat([pos_items, neg_items], dim=0)
             
-            pos_labels = torch.ones(batch_size).to(self.device)
-            neg_labels = torch.zeros(batch_size).to(self.device)
-            all_labels = torch.cat([pos_labels, neg_labels], dim=0)
+            all_labels = torch.zeros(all_users.size(0), device=self.device)
+            all_labels[:batch_size] = 1.0
 
             self.optimizer.zero_grad()
             preds = self.model(all_users, all_items)
             
-            loss = self.criterion(preds.squeeze(), all_labels.squeeze())
+            loss = self.criterion(preds.view(-1), all_labels)
             
             loss.backward()
             self.optimizer.step()
@@ -45,6 +46,159 @@ class RecSysTrainer:
             
         return total_loss / len(loader)
     
+    def train_n_steps_nmf(self, train_loader, validation_loader, num_items, cfg, save_path="nmf"):
+        train_losses = []
+        val_hr = []
+        val_ndcg = []
+        eval_at = []
+        train_iter = iter(train_loader)
+        best_ndcg = float("-inf")
+        patience_counter = 0
+        for i in tqdm(range(cfg.training.max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=cfg.training.max_steps):
+            try:
+                batch = next(train_iter)
+            except StopIteration:
+                train_iter = iter(train_loader)
+                batch = next(train_iter)
+
+            users, pos_items, _ = [b.to(self.device) for b in batch]
+            batch_size = users.size(0)
+            neg_count = batch_size * cfg.training.negative_ratio
+
+            neg_items = torch.randint(0, num_items, (neg_count,)).to(self.device)
+            neg_users = users.repeat_interleave(cfg.training.negative_ratio)
+            
+            all_users = torch.cat([users, neg_users], dim=0)
+            all_items = torch.cat([pos_items, neg_items], dim=0)
+            
+            all_labels = torch.zeros(all_users.size(0), device=self.device)
+            all_labels[:batch_size] = 1.0
+
+            self.optimizer.zero_grad()
+            preds = self.model(all_users, all_items)
+            
+            loss = self.criterion(preds.view(-1), all_labels)
+            
+            loss.backward()
+            if (i + 1) % cfg.training.accumulation_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                if self.scheduler:
+                    self.scheduler.step()
+            
+            train_losses.append(loss.item() * cfg.training.accumulation_steps)
+
+            if (i + 1) % (cfg.evaluation.interval*cfg.training.accumulation_steps) == 0:
+                hr, ndcg = self.evaluate(loader=train_loader)
+                if ndcg > best_ndcg:
+                    best_ndcg = ndcg
+                    torch.save(self.model.state_dict(), f"{save_path}.pth")
+                    patience_counter = 0
+                elif i > cfg.training.max_steps*cfg.training.get("warmup_ratio", 1):
+                    patience_counter += 1
+                val_hr.append(hr)
+                val_ndcg.append(ndcg)
+                eval_at.append(i+1)
+                self.model.train()
+                if patience_counter >= cfg.training.early_stopping_patience:
+                    print(f"Early stopping at step {i + 1} (no improvement for {cfg.training.early_stopping_patience} evaluations)")
+                    break
+
+        if cfg.training.max_steps % cfg.training.accumulation_steps != 0:
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+            if self.scheduler:
+                self.scheduler.step()
+        return train_losses, val_hr, val_ndcg, eval_at
+    """
+    def train_n_steps_nmf(
+        self,
+        train_loader,
+        validation_loader,
+        num_items,
+        cfg,
+        item_popularity=None,  # <-- pass a tensor of size [num_items]
+        max_norm=None,
+        save_path="nmf"
+    ):
+        train_losses = []
+        val_hr = []
+        val_ndcg = []
+        eval_at = []
+
+        train_iter = iter(train_loader)
+        best_ndcg = float("-inf")
+        patience_counter = 0
+
+        for i in tqdm(range(cfg.training.max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=cfg.training.max_steps, leave=False):
+            try:
+                batch = next(train_iter)
+            except StopIteration:
+                train_iter = iter(train_loader)
+                batch = next(train_iter)
+
+            users, items, _ = [b.to(self.device) for b in batch]
+            pos_items = items[:, 0]          # (N,)
+            neg_items = items[:, 1:]         # (N, K)
+            batch_size = users.size(0)
+            K = neg_items.size(1)
+
+            pos_preds = self.model(users, pos_items)                    # (N,)
+            neg_preds = self.model(
+                users.repeat_interleave(K),
+                neg_items.reshape(-1)
+            ).view(batch_size, K)                                        # (N, K)
+
+            pos_labels = torch.ones_like(pos_preds)
+            neg_labels = torch.zeros(batch_size * K, device=self.device)
+            
+            preds = torch.cat([pos_preds, neg_preds.reshape(-1)])
+            labels = torch.cat([pos_labels, neg_labels])
+            
+            loss = self.criterion(preds, labels)
+            self.optimizer.zero_grad()
+            loss.backward()
+            if max_norm is not None:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+
+            if (i + 1) % cfg.training.accumulation_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                if self.scheduler:
+                    self.scheduler.step()
+
+            train_losses.append(loss.item())
+
+            # -------------------------
+            # Evaluation
+            # -------------------------
+            if (i + 1) % (cfg.evaluation.interval * cfg.training.accumulation_steps) == 0 or (i+1) == cfg.training.max_steps:
+                #hr, ndcg = self.evaluate(loader=train_loader)
+                #print(f" Train loader hr: {hr} | ndcg: {ndcg}")
+                hr, ndcg = self.evaluate(loader=validation_loader)
+                print(f" Valid loader hr: {hr} | ndcg: {ndcg}")
+                
+                #hr, ndcg = self.evaluate(loader=train_loader) # CHANGE BACK 
+
+                if ndcg > best_ndcg and i > cfg.training.max_steps * cfg.training.get("warmup_ratio", 0):
+                    best_ndcg = ndcg
+                    torch.save(self.model.state_dict(), f"{save_path}.pth")
+                    patience_counter = 0
+                elif i > cfg.training.max_steps * cfg.training.get("warmup_ratio", 0):
+                    patience_counter += 1
+
+                val_hr.append(hr)
+                val_ndcg.append(ndcg)
+                eval_at.append(i + 1)
+
+                self.model.train()
+
+                if patience_counter >= cfg.training.early_stopping_patience:
+                    print(f"Early stopping at step {i + 1}")
+                    break
+        
+        return train_losses, val_hr, val_ndcg, eval_at
+
     def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=1000, k=10, save_path="bert", cfg=None):
         self.model.train()
         train_losses = []
@@ -54,7 +208,7 @@ class RecSysTrainer:
         train_iter = iter(train_loader)
         best_ndcg = float("-inf")
         patience_counter = 0
-        for i in tqdm(range(max_steps), desc=f"Training {cfg.dataset.name}", total=max_steps):
+        for i in tqdm(range(max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=max_steps):
             try:
                 batch = next(train_iter)
             except StopIteration:
@@ -103,15 +257,14 @@ class RecSysTrainer:
         if performance_per_user:
             user_hr = {}
             user_ndcg = {}
-        if isinstance(self.model, NeuralMF):
+        if isinstance(self.model, NeuralMF) or isinstance(self.model, NeuMF):
             self.model.eval()
             ndcg_list = []
             hr_list = []
 
             with torch.no_grad():
-                for batch in loader:
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
                     users, items, labels = [b.to(self.device) for b in batch]
-                
                     if items.dim() == 1:
                         items = items.unsqueeze(1)
                     
@@ -123,6 +276,7 @@ class RecSysTrainer:
                     items_flat = items.reshape(-1)
 
                     scores = self.model(users_flat, items_flat)
+                    scores = scores + torch.randn_like(scores) * 1e-6
                     scores = scores.view(batch_size, num_candidate_items)
 
                     _, indices = torch.topk(scores, k=current_k, dim=1)
@@ -161,6 +315,7 @@ class RecSysTrainer:
                     scores_full = logits[:, -1, :]
 
                     scores = scores_full.gather(1, items)
+                    scores = scores + torch.randn_like(scores) * 1e-6
                     _, indices = torch.topk(scores, k=current_k, dim=1)
 
                     for i in range(batch_size):

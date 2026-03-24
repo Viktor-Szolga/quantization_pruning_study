@@ -25,6 +25,10 @@ full_ratings = pd.read_csv(
         names=["UserID", "MovieID", "Rating", "Timestamp"],
         encoding="latin-1"
     ) 
+
+user_counts = full_ratings["UserID"].value_counts()
+full_ratings = full_ratings[full_ratings["UserID"].isin(user_counts[user_counts >= 5].index)]
+full_ratings = full_ratings.drop_duplicates(subset=["UserID", "MovieID"], keep="first")
 # -------------------NeuMF-----------------------
 full_ratings["MovieID"] += 1
 unique_items = sorted(full_ratings["MovieID"].unique())
@@ -54,13 +58,18 @@ for item_id, count in item_counts.items():
 popularity_smooth = popularity #** 0.75
 popularity_smooth = popularity_smooth / popularity_smooth.sum()
 
+user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
+user_item_set = {
+    int(user_id): set(items)
+    for user_id, items in user_history.items()
+}
 
 with open(BASE_DIR / "data" / out_dir / "popularity.pkl", "wb") as f:
     pickle.dump({
         "counts": popularity,
-        "prob": popularity_smooth
+        "prob": popularity_smooth,
+        "user_item_set": user_item_set
     }, f)
-
 # Save data
 nmf_train = train_df[["UserID", "MovieID", "Rating"]].to_numpy()
 with open(BASE_DIR / "data" / out_dir / "nmf" / "train.pkl", "wb") as f:

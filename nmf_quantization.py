@@ -17,8 +17,8 @@ warnings.filterwarnings(
 )
 import bitsandbytes as bnb
 
-from src.data_manager import MovieLensDataManager
-from src.models import NeuralMF
+from src.data_manager import DataManager
+from src.models import NeuMF
 from src.trainer import RecSysTrainer
 import torch.nn.functional as F
 
@@ -102,8 +102,10 @@ def main(path):
     prune_model = [False, True]
     for p in prune_model:
         
-        dm = MovieLensDataManager("nmf")
-        model = NeuralMF(num_users=dm.num_users + 1, num_items=dm.num_items + 1, latent_mf=32, latent_mlp=512, hidden_sizes=[512, 256, 128, 64])
+        data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg, cfg.training.batch_size, cfg.model.params.get("max_sequence_length", 0), smooth_popularity=cfg.training.get("smooth_popularity", False))
+        model = NeuMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1,
+                           latent_dim_mf=cfg.model.params.latent_mf, latent_dim_mlp=cfg.model.params.latent_mlp,
+                             hidden_sizes=cfg.model.params.hidden_sizes, dropout_prob=cfg.model.params.dropout_rate)
         
         model.load_state_dict(torch.load(path, map_location="cuda"))
         
@@ -135,7 +137,7 @@ def main(path):
             
 
 if __name__ == "__main__":
-    name = "trained_models/best_nmf_model.pth"
+    name = "trained_models/nmf_model_ml-1m_42.pth"
     results_list = main(name)
 
     type_classifications = ["fp32_np","fp16_np", "int8_np", "fp4_np", "nf4_np", "fp32_p","fp16_p", "int8_p", "fp4_p", "nf4_p"]

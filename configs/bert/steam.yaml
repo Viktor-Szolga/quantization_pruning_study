@@ -16,11 +16,11 @@ model:
     max_sequence_length: 20
 
 training:
-  update_steps: 50000
+  update_steps: 100000
   warmup_ratio: 0.1
   batch_size: 256
   accumulation_steps: 1
-  early_stopping_patience: 5
+  early_stopping_patience: 20
 
 optimizer:
   name: AdamW
@@ -34,10 +34,6 @@ loss:
   name: CrossEntropyLoss
   params:
     ignore_index: 0
-
-data:
-  dataset: MovieLens
-  model_type: bert
 
 evaluation:
   interval: 500
