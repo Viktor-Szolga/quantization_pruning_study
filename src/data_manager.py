@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT_DIR = Path(__file__).parent.parent
-
+"""
 class MovieLensDataManager:
     def __init__(self, model_type: str, dataset="ml-1m"):
         if dataset == "ml-1m":
@@ -53,11 +53,11 @@ class MovieLensDataManager:
         self.train_loader = DataLoader(self.train_set, batch_size=256, shuffle=True)
         self.valid_loader = DataLoader(self.valid_set, batch_size=256, shuffle=False)
         self.test_loader = DataLoader(self.test_set, batch_size=256, shuffle=False)
-
+"""
 
     
 class DataManager:
-    def __init__(self, model_type, dataset, batch_size=128, max_sequence_length=100):
+    def __init__(self, model_type, dataset, cfg, batch_size=128, max_sequence_length=100, smooth_popularity=False):
         with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "train.pkl", "rb") as f:
             self.train_data = pickle.load(f)
         with open(ROOT_DIR / "data" / f"processed_{dataset}" / model_type.lower() / "valid.pkl", "rb") as f:
@@ -71,9 +71,9 @@ class DataManager:
             
         match model_type.upper():
             case "NMF":
-                self.train_set = NMFDatset(self.train_data)
-                self.valid_set = NMFDatset(self.valid_data, all_item_ids=np.arange(1, self.num_items), num_negatives=100)
-                self.test_set = NMFDatset(self.test_data, all_item_ids=np.arange(1, self.num_items), num_negatives=100)
+                self.train_set = NMFDatset(self.train_data, all_item_ids=np.arange(1, self.num_items), num_negatives=cfg.training.num_negatives, user_item_set=self.popularity["user_item_set"], pop_prob=self.popularity["prob"], smooth_popularity=smooth_popularity, num_items=self.num_items)
+                self.valid_set = NMFDatset(self.valid_data, all_item_ids=np.arange(1, self.num_items), num_negatives=100, user_item_set=self.popularity["user_item_set"], pop_prob=None, num_items=self.num_items)
+                self.test_set = NMFDatset(self.test_data, all_item_ids=np.arange(1, self.num_items), num_negatives=100, user_item_set=self.popularity["user_item_set"], pop_prob=None, num_items=self.num_items)
             case "BERT":
                 self.train_set = BERTDataset(self.train_data, prob=self.popularity["prob"], num_items=self.num_items, mode="train", max_len=max_sequence_length)
                 self.valid_set = BERTDataset(self.valid_data, prob=self.popularity["prob"], num_items=self.num_items, all_item_ids=np.arange(1, self.num_items), mode="valid", num_negatives=100, max_len=max_sequence_length)

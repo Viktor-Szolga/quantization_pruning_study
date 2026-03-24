@@ -1,9 +1,9 @@
 import torch
 import numpy as np
 import random
-from src.data_manager import DataManager, MovieLensDataManager
+from src.data_manager import DataManager
 from src.trainer import RecSysTrainer
-from src.models import NeuralMF, Bert4Rec
+from src.models import NeuMF, Bert4Rec
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -20,10 +20,12 @@ def main(config_path):
     set_seed(cfg.seed)
     device = "cuda" if (cfg.device == "auto" and torch.cuda.is_available()) else cfg.device
 
-    data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg.training.batch_size, cfg.model.params.max_sequence_length)
+    data_manager = DataManager(cfg.model.type, cfg.dataset.name, cfg, cfg.training.batch_size, cfg.model.params.get("max_sequence_length", 0), smooth_popularity=cfg.training.get("smooth_popularity", False))
     match cfg.model.type:
         case "nmf":
-            model = NeuralMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1, latent_mf=cfg.model.params.latent_mf, latent_mlp=cfg.model.params.latent_mlp, hidden_sizes=cfg.model.params.hidden_sizes)
+            model = NeuMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1,
+                           latent_dim_mf=cfg.model.params.latent_mf, latent_dim_mlp=cfg.model.params.latent_mlp,
+                             hidden_sizes=cfg.model.params.hidden_sizes, dropout_prob=cfg.model.params.dropout_rate)
         case "bert":
             model = Bert4Rec(item_num=data_manager.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
                     max_sequence_length=cfg.model.params.max_sequence_length, hidden_dropout=cfg.model.params.hidden_dropout, attention_dropout=cfg.model.params.attention_dropout)
@@ -32,8 +34,8 @@ def main(config_path):
         optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.optimizer.lr, weight_decay=cfg.optimizer.weight_decay)
     
     match cfg.loss.name:
-        case "BCELoss":
-            criterion = torch.nn.BCELoss()
+        case "BCELossLogits":
+            criterion = torch.nn.BCEWithLogitsLoss()
         case "CrossEntropyLoss":
             criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
     
@@ -43,6 +45,12 @@ def main(config_path):
                                             optimizer,
                                             num_warmup_steps=cfg.training.update_steps*cfg.training.warmup_ratio,
                                             num_training_steps=cfg.training.update_steps
+                                        )
+        case "cosineAnnealing":
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                                            optimizer,
+                                            T_max=cfg.training.max_steps,
+                                            eta_min=1e-5
                                         )
         case None:
             scheduler = None
@@ -57,30 +65,27 @@ def main(config_path):
 
     match cfg.model.type:
         case "nmf":
-            for epoch in tqdm(range(cfg.training.epochs), desc="Training", total=cfg.training.epochs):
-                train_losses.append(trainer.train_epoch_nmf(data_manager.train_loader, data_manager.num_items))
-                hr, ndcg = trainer.evaluate(data_manager.valid_loader)
-                ndcg_list.append(ndcg)
-                hit_list.append(hr)
-                if ndcg > best_ndcg:
-                    best_ndcg = ndcg
-                    os.makedirs(cfg.saving.save_dir, exist_ok=True)
-                    save_path = Path(cfg.saving.save_dir) / f"{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}"
-                    torch.save(model.state_dict(), str(save_path))
+            os.makedirs(cfg.saving.save_dir, exist_ok=True)
+            print(trainer.model)
+            train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_nmf(
+                data_manager.train_loader, data_manager.valid_loader, data_manager.num_items, cfg, 
+                item_popularity=torch.tensor(data_manager.popularity["prob"], dtype=torch.float32),
+                save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{cfg.seed}",
+                max_norm=cfg.training.max_norm)
 
-            os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}_{cfg.seed}", exist_ok=True)
+            os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
-            plt.plot(range(cfg.training.epochs), train_losses, label="Train")
+            plt.plot(range(eval_at[-1]), train_losses, label="Train")
             plt.title("Train loss")
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/train_loss_{cfg.seed}.png")
             plt.close()
 
-            plt.plot(range(cfg.training.epochs), hit_list, label="HR")
+            plt.plot(eval_at, hit_list, label="HR")
             plt.title("HR")
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/hit_rate_{cfg.seed}.png")
             plt.close()
 
-            plt.plot(range(cfg.training.epochs), ndcg_list, label="NDCG")
+            plt.plot(eval_at, ndcg_list, label="NDCG")
             plt.title("NDCG")
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
             plt.close()
@@ -113,7 +118,9 @@ def main(config_path):
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{cfg.seed}.png")
             plt.close()
             print(max(ndcg_list))
-    
+    print("Performance on test:")
+    hr, ndcg = trainer.evaluate(data_manager.test_loader)
+    print(f" Test loader hr: {hr} | ndcg: {ndcg}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -124,5 +131,11 @@ if __name__ == "__main__":
         default="ml-1m",
         help="Dataset name (one of 'ml-1m', 'ml-20m', 'beauty', 'steam')"
     )
+    parser.add_argument(
+        "-m", "--model",
+        type=str,
+        default="nmf",
+        help="Model type (one of 'bert', 'nmf')"
+    )
     args = parser.parse_args()
-    main(f"configs/bert/{args.dataset}.yaml")
+    main(f"configs/{args.model}/{args.dataset}.yaml")

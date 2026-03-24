@@ -28,6 +28,10 @@ df = df.rename(columns={
     "timestamp": "Timestamp"
 })[["UserID", "ItemID", "Rating", "Timestamp"]]
 
+user_counts = df["UserID"].value_counts()
+df = df[df["UserID"].isin(user_counts[user_counts >= 5].index)]
+df = df.drop_duplicates(subset=["UserID", "ItemID"], keep="first")
+
 df["UserID"] = df["UserID"].astype("category").cat.codes + 1
 df["ItemID"] = df["ItemID"].astype("category").cat.codes + 1
 
@@ -65,10 +69,17 @@ for item_id, count in item_counts.items():
 popularity_smooth = popularity #** 0.75
 popularity_smooth = popularity_smooth / popularity_smooth.sum()
 
+user_history = sorted_ratings.groupby("UserID")["ItemID"].apply(list).to_dict()
+user_item_set = {
+    int(user_id): set(items)
+    for user_id, items in user_history.items()
+}
+
 with open(BASE_DIR / "data" / OUT_DIR / "popularity.pkl", "wb") as f:
     pickle.dump({
         "counts": popularity,
-        "prob": popularity_smooth
+        "prob": popularity_smooth,
+        "user_item_set": user_item_set
     }, f)
 
 with open(BASE_DIR / "data" / OUT_DIR / "nmf" / "train.pkl", "wb") as f:
