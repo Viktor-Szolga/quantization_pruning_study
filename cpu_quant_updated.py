@@ -207,12 +207,18 @@ if __name__ == "__main__":
         default="nmf",
         help="Model type (one of 'bert', 'nmf')"
     )
+    parser.add_argument(
+        "-s", "--seed",
+        type=int,
+        default=None,
+        help="Random seed -default: None"
+    )
     args = parser.parse_args()
     # --- CONFIG ---
     # Update these strings to match your actual file structure
     DATASET = args.dataset
     MODEL_CLASS = args.model
-    MODEL_PATH = f"trained_models/{MODEL_CLASS}_model_{DATASET}_42.pth"
+    MODEL_PATH = f"trained_models/{MODEL_CLASS}_model_{DATASET}_{args.seed}.pth"
     CONFIG_PATH = f"configs/{MODEL_CLASS}/{DATASET}.yaml"
     
     # Define the list of attributes to be replaced
@@ -225,7 +231,7 @@ if __name__ == "__main__":
         cfg = OmegaConf.load(CONFIG_PATH)
         # Ensure your seed is set for reproducibility
         from src.utils import set_seed
-        set_seed(cfg.seed)
+        set_seed(args.seed)
         
         final_results = main_full_quant_study(MODEL_PATH, cfg, ATTRIBUTES_TO_QUANTIZE)
         
