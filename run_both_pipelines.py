@@ -6,6 +6,8 @@ if __name__=="__main__":
     datasets = ["ml-1m", "beauty", "steam", "ml-20m"]
     models = ["bert", "nmf"]
     seeds = list(range(5))
+    seeds = [10000]
+    datasets = ["steam"]
     for dataset in datasets:
         subprocess.run([sys.executable, "-u", os.path.join("preprocessing", f"{dataset}.py")], check=True)
         for model in models:

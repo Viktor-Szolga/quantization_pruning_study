@@ -4,40 +4,11 @@ import random
 import numpy as np
 
 class NMFDatset(Dataset):
-    def __init__(self, data_array, all_item_ids=None, num_negatives=0):
+    def __init__(self, data_array, num_items, user_item_set, num_negatives, 
+                 pop_prob=None, smooth_popularity=False):
         self.users = torch.LongTensor(data_array[:, 0].copy())
         self.items = torch.LongTensor(data_array[:, 1].copy())
         self.ratings = torch.FloatTensor(data_array[:, 2].copy())
-        self.all_item_ids = all_item_ids
-        self.num_negatives = num_negatives
-        
-
-    def __len__(self):
-        return len(self.users)
-
-    def __getitem__(self, idx):
-        user = self.users[idx]
-        pos_item = self.items[idx]
-        if self.num_negatives > 0:
-            neg_items = np.random.choice(self.all_item_ids, self.num_negatives, replace=False)
-            items = torch.LongTensor([pos_item] + neg_items.tolist())
-            return user, items, self.ratings[idx]
-        return self.users[idx], self.items[idx], self.ratings[idx]
-
-
-
-class NMFDatset(Dataset):
-    def __init__(self, data_array, all_item_ids, num_items, user_item_set, num_negatives=0, pop_prob=None, smooth_popularity=False):
-        """
-        data_array: numpy array of shape (num_samples, 3) with [user, item, rating]
-        all_item_ids: array of all item IDs
-        num_negatives: number of negatives per positive
-        pop_prob: popularity probability of items, must align with all_item_ids
-        """
-        self.users = torch.LongTensor(data_array[:, 0].copy())
-        self.items = torch.LongTensor(data_array[:, 1].copy())
-        self.ratings = torch.FloatTensor(data_array[:, 2].copy())
-        self.all_item_ids = np.array(all_item_ids)
         self.num_negatives = num_negatives
         self.item_ids = np.arange(1, num_items + 1)
         self.user_item_set = user_item_set
@@ -48,12 +19,7 @@ class NMFDatset(Dataset):
             if smooth_popularity:
                 self.pop_prob = self.pop_prob ** 0.75
             self.pop_prob = self.pop_prob / self.pop_prob.sum()
-            
-            # Check alignment
-            assert len(self.pop_prob) == len(self.item_ids), \
-                f"pop_prob length ({len(self.pop_prob)}) must match item_ids length ({len(self.item_ids)})"
         else:
-            # uniform probability if not provided
             self.pop_prob = np.ones(len(self.item_ids)) / len(self.item_ids)
 
     def __len__(self):
@@ -95,26 +61,24 @@ class NMFDatset(Dataset):
 
 class BERTDataset(Dataset):
     def __init__(self, data, prob, num_items, max_len=20, mask_prob=0.2, mode='train',
-                  all_item_ids=None, num_negatives=100):
+                num_negatives=100):
         self.data = data[0]
         self.users = data[1]
 
         self.max_len = max_len
         self.num_items = num_items
+        self.padding_token = 0
         self.mask_token = num_items + 1
         self.mask_prob = mask_prob
         self.mode = mode
 
-        self.all_item_ids = all_item_ids
         self.num_negatives = num_negatives
-
 
         self.pop_prob = prob[1:]
         self.pop_prob = self.pop_prob / self.pop_prob.sum()
         self.item_ids = np.arange(1, num_items + 1)
-        self.streaming = len(self.users) > 100000 and mode == 'train'
+        self.streaming = len(self.users) > 100000 and mode == 'train' # Helps with data augmentation on large datasets
         
-
         if not self.streaming:
             self.samples = []
             for user in self.users:
@@ -212,7 +176,7 @@ class BERTDataset(Dataset):
             tokens = tokens[-self.max_len:]
 
             padding_len = self.max_len - len(tokens)
-            tokens = [0] * padding_len + tokens
+            tokens = [self.padding_token] * padding_len + tokens
 
             return torch.LongTensor(tokens), items, torch.LongTensor([user])
 
@@ -220,7 +184,7 @@ class BERTDataset(Dataset):
             seq = seq[-self.max_len:]
             padding_len = self.max_len - len(seq)
 
-            seq = [0] * padding_len + seq
+            seq = [self.padding_token] * padding_len + seq
 
             tokens = []
             labels = []
@@ -243,9 +207,11 @@ class BERTDataset(Dataset):
                         tokens.append(self.mask_token)
 
                     elif prob < 0.9:
-                        neg = np.random.choice(self.item_ids, p=self.pop_prob)
+                        #-----------------Changed------------------
+                        #neg = np.random.choice(self.item_ids, p=self.pop_prob)
+                        neg = self._sample_negative(set(seq))[0]
+                        #------------------End Changed-------------
                         tokens.append(int(neg))
-
                     else:
                         tokens.append(s)
 
