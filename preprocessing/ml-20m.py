@@ -29,16 +29,29 @@ full_ratings = pd.read_csv(
         encoding="latin-1"
     ) 
 
+#----------------------Changed----------------------------
+full_ratings["Rating"] = 1
+#----------------------END Changed----------------------------
+
 user_counts = full_ratings["UserID"].value_counts()
 full_ratings = full_ratings[full_ratings["UserID"].isin(user_counts[user_counts >= 5].index)]
-full_ratings = full_ratings.drop_duplicates(subset=["UserID", "MovieID"], keep="first")
-# -------------------NeuMF-----------------------
-full_ratings["MovieID"] += 1
+
+#----------------------Changed----------------------------
+"""
+print(full_ratings.head())
 unique_items = sorted(full_ratings["MovieID"].unique())
 item2id = {item: idx + 1 for idx, item in enumerate(unique_items)}
 print(min(unique_items))
 full_ratings["MovieID"] = full_ratings["MovieID"].map(item2id)
-# LOO
+"""
+user2id = {u: i+1 for i, u in enumerate(sorted(full_ratings["UserID"].unique()))}
+item2id = {i: j+1 for j, i in enumerate(sorted(full_ratings["MovieID"].unique()))}
+
+full_ratings["UserID"] = full_ratings["UserID"].map(user2id)
+full_ratings["MovieID"] = full_ratings["MovieID"].map(item2id)
+#---------------------- END Changed----------------------------
+
+# NeuMF
 sorted_ratings = full_ratings.sort_values(by=["UserID", "Timestamp"], ascending=True)
 
 item_rank = sorted_ratings.groupby("UserID").cumcount(ascending=False)
@@ -46,11 +59,11 @@ test_df = sorted_ratings[item_rank == 0].copy()
 valid_df = sorted_ratings[item_rank == 1].copy()
 train_df = sorted_ratings[item_rank >= 2].copy()
 
-
-print(full_ratings["UserID"].min())
-print(full_ratings["MovieID"].min())
 num_users = full_ratings["UserID"].max()
-num_items = len(unique_items)  # max item ID
+#----------------------Changed----------------------------
+#num_items = len(unique_items)
+num_items = full_ratings["MovieID"].max()
+#----------------------END Changed----------------------------
 stats = (num_users, num_items)
 
 item_counts = train_df["MovieID"].value_counts()
@@ -61,7 +74,10 @@ for item_id, count in item_counts.items():
 popularity_smooth = popularity #** 0.75
 popularity_smooth = popularity_smooth / popularity_smooth.sum()
 
-user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
+#----------------------END Changed----------------------------
+#user_history = sorted_ratings.groupby("UserID")["MovieID"].apply(list).to_dict()
+user_history = train_df.groupby("UserID")["MovieID"].apply(list).to_dict()
+#----------------------END Changed----------------------------
 user_item_set = {
     int(user_id): set(items)
     for user_id, items in user_history.items()
@@ -83,8 +99,6 @@ with open(BASE_DIR / "data" / out_dir / "nmf" / "valid.pkl", "wb") as f:
 nmf_test  = test_df[["UserID", "MovieID", "Rating"]].to_numpy()
 with open(BASE_DIR / "data" / out_dir / "nmf" / "test.pkl", "wb") as f:
     pickle.dump(nmf_test, f)
-with open(BASE_DIR / "data" / out_dir / "stats.pkl", "wb") as f:
-    pickle.dump(stats, f)
 
 
 
@@ -100,11 +114,15 @@ valid_user_ids = []
 test_user_ids = []
 
 for user_id, items in tqdm(user_history.items(), desc="Splitting", total=len(user_history)):
-    # Users need at least 5 interactions
-    if len(items) < 5:
-        continue
+    #---------------------- Changed----------------------------
+    # Need at least 5 interactions
+    #if len(items) < 5:
+    #    continue
+    #----------------------END Changed----------------------------
     
-    uid = int(user_id) - 1
+    #---------------------- Changed----------------------------
+    uid = int(user_id) #- 1
+    #----------------------END Changed----------------------------
 
     # Train
     bert_train_sequences[uid] = {

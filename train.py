@@ -43,8 +43,8 @@ def main(config_path, seed):
         case "linear_with_warmup":
             scheduler = get_linear_schedule_with_warmup(
                                             optimizer,
-                                            num_warmup_steps=cfg.training.update_steps*cfg.training.warmup_ratio,
-                                            num_training_steps=cfg.training.update_steps
+                                            num_warmup_steps=int(cfg.training.max_steps*cfg.training.warmup_ratio),
+                                            num_training_steps=cfg.training.max_steps
                                         )
         case "cosineAnnealing":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -66,12 +66,10 @@ def main(config_path, seed):
     match cfg.model.type:
         case "nmf":
             os.makedirs(cfg.saving.save_dir, exist_ok=True)
-            print(trainer.model)
+            
             train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_nmf(
-                data_manager.train_loader, data_manager.valid_loader, data_manager.num_items, cfg, 
-                item_popularity=torch.tensor(data_manager.popularity["prob"], dtype=torch.float32),
-                save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}",
-                max_norm=cfg.training.max_norm)
+                data_manager.train_loader, data_manager.valid_loader, cfg, 
+                save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}")
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
@@ -90,7 +88,6 @@ def main(config_path, seed):
             plt.savefig(f"{cfg.saving.figure_dir}/{config_path[8:-5]}/ndcg_{seed}.png")
             plt.close()
         case "bert":
-            criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
             trainer = RecSysTrainer(model, optimizer, criterion, device=device, scheduler=scheduler)
             
             train_losses = []
@@ -99,7 +96,7 @@ def main(config_path, seed):
             
             os.makedirs(cfg.saving.save_dir, exist_ok=True)
             train_losses, hit_list, ndcg_list, eval_at = trainer.train_n_steps_bert(data_manager.train_loader, data_manager.valid_loader, accumulation_steps=cfg.training.accumulation_steps, validation_interval=cfg.evaluation.interval,
-                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.update_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}", cfg=cfg)
+                                                                                     max_steps=cfg.training.accumulation_steps*cfg.training.max_steps, save_path=f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}", cfg=cfg)
 
             os.makedirs(f"{cfg.saving.figure_dir}/{config_path[8:-5]}", exist_ok=True)
 
