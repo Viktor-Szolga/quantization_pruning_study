@@ -60,9 +60,9 @@ def main(config_path, seed, precision, device, sparsity):
     }    
 
     if cfg.model.type == "bert":
-        target_attributes = ["item_embedding", "position_embedding", "large_test_emb"]
+        target_attributes = ["item_embedding", "position_embedding"]#, "large_test_emb"]
     else:
-        target_attributes = ["embed_user_GMF", "embed_item_GMF", "embed_user_MLP", "embed_item_MLP", "large_test_emb"]
+        target_attributes = ["embed_user_GMF", "embed_item_GMF", "embed_user_MLP", "embed_item_MLP"]#, "large_test_emb"]
     
     results = []
     raw_results = []
@@ -95,7 +95,7 @@ def main(config_path, seed, precision, device, sparsity):
                             max_sequence_length=cfg.model.params.max_sequence_length, hidden_dropout=cfg.model.params.hidden_dropout, attention_dropout=cfg.model.params.attention_dropout)
         
             model.load_state_dict(torch.load(f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}.pth", map_location="cpu"))
-            model.large_test_emb = torch.nn.Embedding(1_000_000, 128)
+            #model.large_test_emb = torch.nn.Embedding(1_000_000, 128)
             model = model.to(device)
             if sparsity > 0.0:
                 for attr in target_attributes:
