@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from omegaconf import OmegaConf
-
+import torch.nn.utils.prune as prune
 from src.utils import set_seed
 from src.data_manager import DataManager
 from src.models import NeuMF, Bert4Rec
@@ -30,9 +30,14 @@ def get_model_size(model):
         buffer_size += buffer.nelement() * buffer.element_size()
     
     return (param_size + buffer_size) / 1024**2 # Size in MB
+def prune_embedding(layer, sparsity=0.5):
+    if sparsity == 0:
+        return layer
+    prune.l1_unstructured(layer, name="weight", amount=sparsity)
+    prune.remove(layer, "weight")
+    return layer
 
-
-def main(config_path, seed, precision, device):
+def main(config_path, seed, precision, device, sparsity):
     cfg = OmegaConf.load(config_path)
     cfg.training.batch_size=64
     set_seed(seed)
@@ -70,7 +75,7 @@ def main(config_path, seed, precision, device):
         energy_usage = []
         ellapsed_time = []
         
-        for _ in range(11):
+        for _ in range(2):
             if 'model' in locals(): del model
             if 'trainer' in locals(): del trainer
             if 'orig_layer' in locals(): del orig_layer
@@ -92,6 +97,12 @@ def main(config_path, seed, precision, device):
             model.load_state_dict(torch.load(f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}.pth", map_location="cpu"))
             model.large_test_emb = torch.nn.Embedding(1_000_000, 128)
             model = model.to(device)
+            if sparsity > 0.0:
+                for attr in target_attributes:
+                    if hasattr(model, attr):
+                        orig_layer = getattr(model, attr)
+                        setattr(model, attr, prune_embedding(orig_layer, sparsity))
+                        del orig_layer
             
             if q_class is not None:
                 for attr in target_attributes:
@@ -138,6 +149,7 @@ def main(config_path, seed, precision, device):
         hr, ndcg, hr_user, ndcg_user = trainer.evaluate(data_manager.test_loader, performance_per_user=True) 
         results.append({
             "variant": name, 
+            "sparsity": sparsity,
             "model_size": get_model_size(model),
             "mean_ram_mean": np.array(eval_mean_ram[1:]).mean(), 
             "peak_ram_mean": np.array(eval_peak_ram[1:]).mean(), 
@@ -149,6 +161,7 @@ def main(config_path, seed, precision, device):
         })
         raw_results.append({
             "variant": name, 
+            "sparsity": sparsity,
             "model_size": get_model_size(model),
             "mean_ram_mean": np.array(eval_mean_ram[1:]), 
             "peak_ram_mean": np.array(eval_peak_ram[1:]), 
@@ -166,14 +179,15 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dataset", type=str, default="ml-1m", help="Dataset (one of 'ml-1m', 'ml-20m', 'beauty', 'steam')")
     parser.add_argument("-s", "--seed", type=int, default=None, help="Seed to to be used (requires model with that seed)")
     parser.add_argument("-p", "--precisions", nargs="+", type=str, default=["fp32"], help="Nargs with (fp32, fp16, int8, fp4, nf4)")
+    parser.add_argument("--sparsity", type=float, default=0.0, help="Pruning sparsity to test e.g. 0.0 0.3 0.5 0.7")
     
     args = parser.parse_args()
-    results, raw_results = main(f"configs/{args.model}/{args.dataset}.yaml", args.seed, args.precisions, "cuda")
+    results, raw_results = main(f"configs/{args.model}/{args.dataset}.yaml", args.seed, args.precisions, "cuda", args.sparsity)
     results = pd.DataFrame(results)
     print("\n" + "="*90)
     print(results.to_string(index=False))
     print("="*90)
     os.makedirs(f"study_results/{args.model}", exist_ok=True)
-    results.to_csv(f"study_results/{args.model}/{args.dataset}_{args.seed}.csv")
-    with open(f"study_results/{args.model}/{args.dataset}_{args.seed}.pkl", "wb") as f:
+    results.to_csv(f"study_results/{args.model}/{args.dataset}_{args.seed}_{args.sparsity}.csv")
+    with open(f"study_results/{args.model}/{args.dataset}_{args.seed}_{args.sparsity}.pkl", "wb") as f:
         pickle.dump(raw_results, f)
