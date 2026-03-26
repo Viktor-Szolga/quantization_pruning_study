@@ -101,7 +101,7 @@ class RecSysTrainer:
         best_ndcg = float("-inf")
         patience_counter = 0
         self.optimizer.zero_grad()
-        for i in tqdm(range(max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=max_steps):
+        for i in tqdm(range(max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=max_steps, leave=False):
             try:
                 batch = next(train_iter)
             except StopIteration:
@@ -204,7 +204,7 @@ class RecSysTrainer:
             ndcg_list = []
 
             with torch.no_grad():
-                for batch in tqdm(loader, desc="Validating", total=len(loader)):
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
                     seq, items, users = [b.to(self.device) for b in batch]
 
                     batch_size, num_candidates = items.shape
@@ -235,3 +235,24 @@ class RecSysTrainer:
             if performance_per_user:
                 return np.mean(hr_list), np.mean(ndcg_list), user_hr, user_ndcg
             return np.mean(hr_list), np.mean(ndcg_list)
+
+    def measure_metrics(self, loader):
+        if isinstance(self.model, NeuMF):
+            self.model.eval()
+            with torch.no_grad():
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
+                    if hasattr(self.model, "large_test_emb"):
+                        self.model.large_test_emb(torch.randint(0, 1_000_000, (256,), device=self.device))
+                    users, items, _ = [b.to(self.device) for b in batch]
+                    if items.dim() == 1:
+                        items = items.unsqueeze(1)
+                    self.model(users.repeat_interleave(items.shape[-1]), items.reshape(-1))
+        else:
+            self.model.eval()
+            with torch.no_grad():
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
+                    if hasattr(self.model, "large_test_emb"):
+                        self.model.large_test_emb(torch.randint(0, 1_000_000, (256,), device=self.device))
+                    seq, _, _ = [b.to(self.device) for b in batch]
+                    self.model(seq)
+

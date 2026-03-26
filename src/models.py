@@ -121,6 +121,7 @@ class Bert4Rec(nn.Module):
         #------------------End Changed--------------------
         self.item_embedding.weight.data[0].fill_(0)
         
+        
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Embedding)):
