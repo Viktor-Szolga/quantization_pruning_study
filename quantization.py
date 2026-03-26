@@ -75,7 +75,7 @@ def main(config_path, seed, precision, device, sparsity):
         energy_usage = []
         ellapsed_time = []
         
-        for _ in range(2):
+        for _ in range(11):
             if 'model' in locals(): del model
             if 'trainer' in locals(): del trainer
             if 'orig_layer' in locals(): del orig_layer
