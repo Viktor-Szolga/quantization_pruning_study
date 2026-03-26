@@ -98,103 +98,145 @@ class BNB8bitEmbedding(nn.Module):
         super().__init__()
         self.num_embeddings = source_layer.num_embeddings
         self.embedding_dim = source_layer.embedding_dim
-        if chunk_size is None:
-            self.chunk_size = self.num_embeddings
-        else:
-            self.chunk_size = chunk_size
-        
+        self.chunk_size = chunk_size or self.num_embeddings
+
         w = source_layer.weight.data.detach().cuda()
-        self.q_states = []
-        
+
         for chunk_idx, i in enumerate(range(0, self.num_embeddings, self.chunk_size)):
             end_i = min(i + self.chunk_size, self.num_embeddings)
-            chunk_w = w[i:end_i]
-            
-            q_weight, q_state = bnb.functional.quantize_blockwise(chunk_w)
-            
+            chunk_w = w[i:end_i]  # (N, D)
+
+            absmax = chunk_w.abs().amax(dim=1, keepdim=True) + 1e-8
+
+            normed = chunk_w / absmax
+
+            q_weight = torch.clamp((normed * 127).round(), -128, 127).to(torch.int8)
+
             self.register_buffer(f"q_weight_{chunk_idx}", q_weight)
-            if hasattr(q_state, 'absmax'):
-                self.register_buffer(f"absmax_{chunk_idx}", q_state.absmax)
-            if hasattr(q_state, 'code'):
-                self.register_buffer(f"code_{chunk_idx}", q_state.code)
-                
-            self.q_states.append(q_state)
+            self.register_buffer(f"absmax_{chunk_idx}", absmax.squeeze(1))
 
     def forward(self, x):
         if (x >= self.num_embeddings).any():
-            max_id = x.max().item()
-            raise IndexError(f"ID {max_id} is out of bounds for embedding size {self.num_embeddings}")
+            raise IndexError(f"ID {x.max().item()} out of bounds")
 
+        out = torch.empty((*x.shape, self.embedding_dim),
+                          dtype=torch.float32,
+                          device=x.device)
 
-        out = torch.empty((*x.shape, self.embedding_dim), dtype=torch.float32, device=x.device)
-        
         for chunk_idx, i in enumerate(range(0, self.num_embeddings, self.chunk_size)):
             end_i = min(i + self.chunk_size, self.num_embeddings)
-            
-            mask = (x >= i) & (x < end_i)
-            
-            if mask.any():
-                q_w = getattr(self, f"q_weight_{chunk_idx}")
-                q_s = self.q_states[chunk_idx]
-                
-                chunk_w_fp = bnb.functional.dequantize_blockwise(q_w, q_s)
-                
-                local_indices = x[mask] - i
-                out[mask] = chunk_w_fp[local_indices]
-                
-                del chunk_w_fp 
-                
-        return out
 
+            mask = (x >= i) & (x < end_i)
+            if not mask.any():
+                continue
+
+            q_w = getattr(self, f"q_weight_{chunk_idx}")
+            absmax = getattr(self, f"absmax_{chunk_idx}")
+
+            local_indices = x[mask] - i
+
+            selected_qw = q_w[local_indices].float()
+            selected_absmax = absmax[local_indices].unsqueeze(1)
+
+            out[mask] = selected_qw * (selected_absmax / 127.0)
+
+        return out
 
 class BNB4bitEmbedding(nn.Module):
     def __init__(self, source_layer, chunk_size=64, quant_type="nf4"):
         super().__init__()
         self.num_embeddings = source_layer.num_embeddings
         self.embedding_dim = source_layer.embedding_dim
-        if chunk_size is None:
-            self.chunk_size = self.num_embeddings
-        else:
-            self.chunk_size = chunk_size
-        
-        w = source_layer.weight.data.detach().cuda()
-        self.q_states = []
-        
+        self.chunk_size = chunk_size or self.num_embeddings
+        self.quant_type = quant_type.lower()
+
+        assert self.quant_type in ["fp4", "nf4"]
+
+        device = source_layer.weight.device
+        w = source_layer.weight.data.detach().to(device)
+
+        if self.quant_type == "nf4":
+            self.register_buffer(
+                "codebook",
+                torch.tensor([
+                    -1.0000, -0.6962, -0.5251, -0.3949,
+                    -0.2844, -0.1848, -0.0911,  0.0000,
+                     0.0796,  0.1609,  0.2461,  0.3379,
+                     0.4407,  0.5626,  0.7230,  1.0000
+                ], dtype=torch.float32, device=device)
+            )
+
         for chunk_idx, i in enumerate(range(0, self.num_embeddings, self.chunk_size)):
             end_i = min(i + self.chunk_size, self.num_embeddings)
-            chunk_w = w[i:end_i]
-            
-            q_weight, q_state = bnb.functional.quantize_4bit(chunk_w, quant_type=quant_type)
-            
-            self.register_buffer(f"q_weight_{chunk_idx}", q_weight)
-            if hasattr(q_state, 'absmax'):
-                self.register_buffer(f"absmax_{chunk_idx}", q_state.absmax)
-                
-            self.q_states.append(q_state)
+            chunk_w = w[i:end_i]  # (N, D)
+
+            absmax = chunk_w.abs().amax(dim=1, keepdim=True) + 1e-8
+            normed = chunk_w / absmax  # [-1,1]
+
+            if self.quant_type == "fp4":
+                q = torch.clamp(((normed + 1) * 7.5).round(), 0, 15)
+
+            else:  # nf4
+                cb = self.codebook.view(1, 1, -1)
+                dist = torch.abs(normed.unsqueeze(-1) - cb)
+                q = dist.argmin(dim=-1)
+
+            q = q.to(torch.uint8)  # (N, D)
+
+            if self.embedding_dim % 2 != 0:
+                q = torch.cat([q, torch.zeros(q.size(0), 1, device=q.device, dtype=q.dtype)], dim=1)
+
+            q_even = q[:, 0::2]
+            q_odd  = q[:, 1::2]
+
+            packed = (q_even << 4) | q_odd  # (N, D/2)
+
+            self.register_buffer(f"q_weight_{chunk_idx}", packed)
+            self.register_buffer(f"absmax_{chunk_idx}", absmax.squeeze(1))
 
     def forward(self, x):
         if (x >= self.num_embeddings).any():
-            max_id = x.max().item()
-            raise IndexError(f"ID {max_id} is out of bounds for embedding size {self.num_embeddings}")
+            raise IndexError(f"ID {x.max().item()} out of bounds")
 
-        out = torch.empty((*x.shape, self.embedding_dim), dtype=torch.float32, device=x.device)
-        
+        out = torch.empty((*x.shape, self.embedding_dim),
+                          dtype=torch.float32,
+                          device=x.device)
+
         for chunk_idx, i in enumerate(range(0, self.num_embeddings, self.chunk_size)):
             end_i = min(i + self.chunk_size, self.num_embeddings)
-            
+
             mask = (x >= i) & (x < end_i)
-            
-            if mask.any():
-                q_w = getattr(self, f"q_weight_{chunk_idx}")
-                q_s = self.q_states[chunk_idx]
-                
-                chunk_w_fp = bnb.functional.dequantize_4bit(q_w, q_s)
-                
-                local_indices = x[mask] - i
-                out[mask] = chunk_w_fp[local_indices]
-                
-                del chunk_w_fp 
-                
+            if not mask.any():
+                continue
+
+            packed = getattr(self, f"q_weight_{chunk_idx}")
+            absmax = getattr(self, f"absmax_{chunk_idx}")
+
+            local_indices = x[mask] - i
+
+            selected = packed[local_indices]  # (M, D/2)
+
+            high = (selected >> 4) & 0xF
+            low  = selected & 0xF
+
+            q = torch.empty(
+                (selected.shape[0], selected.shape[1] * 2),
+                dtype=torch.uint8,
+                device=selected.device
+            )
+
+            q[:, 0::2] = high
+            q[:, 1::2] = low
+
+            q = q[:, :self.embedding_dim]
+
+            if self.quant_type == "fp4":
+                normed = (q.float() / 7.5) - 1.0
+            else:
+                normed = self.codebook[q.long()]
+
+            out[mask] = normed * absmax[local_indices].unsqueeze(1)
+
         return out
 
 def BNBFP4Embedding(layer): return BNB4bitEmbedding(layer, quant_type="fp4")
@@ -202,53 +244,63 @@ def BNBNF4Embedding(layer): return BNB4bitEmbedding(layer, quant_type="nf4")
 
 class TiedEmbeddingLinear(nn.Module):
     def __init__(self, embedding_layer):
-        """
-        A weight-tied output layer (bias=False) compatible with chunked 
-        16-bit, 8-bit, and 4-bit embedding classes.
-        """
         super().__init__()
         self.embedding_layer = embedding_layer
         self.in_features = embedding_layer.embedding_dim
         self.out_features = embedding_layer.num_embeddings
 
     def forward(self, x):
-        """
-        x: [batch, seq_len, hidden_dim]
-        returns: [batch, seq_len, vocab_size]
-        """
-        if hasattr(self.embedding_layer, 'weight'):
+        if hasattr(self.embedding_layer, "weight"):
             return F.linear(x, self.embedding_layer.weight.to(torch.float32))
 
-        elif hasattr(self.embedding_layer, 'q_states'):
-            logits = torch.empty(
-                (*x.shape[:-1], self.out_features), 
-                dtype=torch.float32, 
-                device=x.device
-            )
-            
-            chunk_size = self.embedding_layer.chunk_size
-            is_4bit = "4bit" in type(self.embedding_layer).__name__.lower()
-            
-            for chunk_idx, i in enumerate(range(0, self.out_features, chunk_size)):
-                end_i = min(i + chunk_size, self.out_features)
-                
-                q_w = getattr(self.embedding_layer, f"q_weight_{chunk_idx}")
-                q_s = self.embedding_layer.q_states[chunk_idx]
-                
-                if is_4bit:
-                    chunk_w_fp = bnb.functional.dequantize_4bit(q_w, q_s)
-                else:
-                    chunk_w_fp = bnb.functional.dequantize_blockwise(q_w, q_s)
-                
-                logits[..., i:end_i] = F.linear(x, chunk_w_fp)
-                
-                del chunk_w_fp 
-                
-            return logits
-            
-        else:
-            raise TypeError("The provided embedding layer is not a recognized type.")
+        logits = torch.empty(
+            (*x.shape[:-1], self.out_features),
+            dtype=torch.float32,
+            device=x.device
+        )
 
+        chunk_size = self.embedding_layer.chunk_size
+        quant_type = getattr(self.embedding_layer, "quant_type", None)
+
+        for chunk_idx, i in enumerate(range(0, self.out_features, chunk_size)):
+            end_i = min(i + chunk_size, self.out_features)
+
+            q_w = getattr(self.embedding_layer, f"q_weight_{chunk_idx}")
+            absmax = getattr(self.embedding_layer, f"absmax_{chunk_idx}")
+
+            if q_w.dtype == torch.int8:
+                chunk_w_fp = q_w.float() * (absmax[:, None] / 127.0)
+
+            elif q_w.dtype == torch.uint8:
+                high = (q_w >> 4) & 0xF
+                low  = q_w & 0xF
+
+                q = torch.empty(
+                    (q_w.shape[0], q_w.shape[1] * 2),
+                    dtype=torch.uint8,
+                    device=q_w.device
+                )
+
+                q[:, 0::2] = high
+                q[:, 1::2] = low
+                q = q[:, :self.in_features]
+
+                if quant_type == "nf4":
+                    codebook = self.embedding_layer.codebook
+                    normed = codebook[q.long()]
+                else:
+                    normed = (q.float() / 7.5) - 1.0
+
+                chunk_w_fp = normed * absmax[:, None]
+
+            else:
+                raise TypeError("Unsupported quantization type")
+
+            logits[..., i:end_i] = F.linear(x, chunk_w_fp)
+
+            del chunk_w_fp
+
+        return logits
 
 def set_seed(seed=None):
     if seed is None:
