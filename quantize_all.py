@@ -5,7 +5,7 @@ import os
 if __name__=="__main__":
     datasets = ["ml-1m", "beauty", "steam", "ml-20m"]
     models = ["bert", "nmf"]
-    sparsities = [0.3, 0.5, 0.7]
+    sparsities = [0, 0.3, 0.5, 0.7]
     seeds = list(range(5))
     for dataset in datasets:
         for model in models:
