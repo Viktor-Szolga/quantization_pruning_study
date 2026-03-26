@@ -94,7 +94,7 @@ class GPU16bitEmbedding(nn.Module):
         return F.embedding(x, self.weight).to(torch.float32)
 
 class BNB8bitEmbedding(nn.Module):
-    def __init__(self, source_layer, chunk_size=2048):
+    def __init__(self, source_layer, chunk_size=64):
         super().__init__()
         self.num_embeddings = source_layer.num_embeddings
         self.embedding_dim = source_layer.embedding_dim
@@ -148,7 +148,7 @@ class BNB8bitEmbedding(nn.Module):
 
 
 class BNB4bitEmbedding(nn.Module):
-    def __init__(self, source_layer, chunk_size=2048, quant_type="nf4"):
+    def __init__(self, source_layer, chunk_size=64, quant_type="nf4"):
         super().__init__()
         self.num_embeddings = source_layer.num_embeddings
         self.embedding_dim = source_layer.embedding_dim
