@@ -94,7 +94,7 @@ class GPU16bitEmbedding(nn.Module):
         return F.embedding(x, self.weight).to(torch.float32)
 
 class BNB8bitEmbedding(nn.Module):
-    def __init__(self, source_layer, chunk_size=2048):
+    def __init__(self, source_layer, chunk_size=512):
         super().__init__()
         self.num_embeddings = source_layer.num_embeddings
         self.embedding_dim = source_layer.embedding_dim
@@ -143,7 +143,7 @@ class BNB8bitEmbedding(nn.Module):
         return out
 
 class BNB4bitEmbedding(nn.Module):
-    def __init__(self, source_layer, chunk_size=2048, quant_type="nf4"):
+    def __init__(self, source_layer, chunk_size=512, quant_type="nf4"):
         super().__init__()
         self.num_embeddings = source_layer.num_embeddings
         self.embedding_dim = source_layer.embedding_dim
@@ -158,13 +158,12 @@ class BNB4bitEmbedding(nn.Module):
         if self.quant_type == "nf4":
             self.register_buffer(
                 "codebook",
-                torch.tensor([
-                    -1.0000, -0.6962, -0.5251, -0.3949,
-                    -0.2844, -0.1848, -0.0911,  0.0000,
-                     0.0796,  0.1609,  0.2461,  0.3379,
-                     0.4407,  0.5626,  0.7230,  1.0000
-                ], dtype=torch.float32, device=device)
-            )
+                torch.tensor([-1.0, -0.6961928009986877, -0.5250730514526367,
+                              -0.39491748809814453, -0.28444138169288635, -0.18477343022823334,
+                              -0.09105003625154495, 0.0, 0.07958029955625534, 0.16093020141124725,
+                               0.24611230194568634, 0.33791524171829224, 0.44070982933044434,
+                               0.5626170039176941, 0.7229568362236023, 1.0], dtype=torch.float32, device=device)
+                )
 
         for chunk_idx, i in enumerate(range(0, self.num_embeddings, self.chunk_size)):
             end_i = min(i + self.chunk_size, self.num_embeddings)
@@ -211,7 +210,6 @@ class BNB4bitEmbedding(nn.Module):
 
             packed = getattr(self, f"q_weight_{chunk_idx}")
             absmax = getattr(self, f"absmax_{chunk_idx}")
-
             local_indices = x[mask] - i
 
             selected = packed[local_indices]  # (M, D/2)
