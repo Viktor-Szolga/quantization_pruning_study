@@ -76,43 +76,7 @@ def main(config_path, seed, precision, device, sparsity):
         energy_usage = []
         ellapsed_time = []
         
-        q_class = variants[name]
-        set_seed(seed)
-        
-        match cfg.model.type:
-            case "nmf":
-                model = NeuMF(num_users=data_manager.num_users + 1, num_items=data_manager.num_items + 1,
-                            latent_dim_mf=cfg.model.params.latent_mf, latent_dim_mlp=cfg.model.params.latent_mlp,
-                                hidden_sizes=cfg.model.params.hidden_sizes, dropout_prob=cfg.model.params.dropout_rate)
-            case "bert":
-                model = Bert4Rec(item_num=data_manager.num_items, hidden_size=cfg.model.params.hidden_size, num_layers=cfg.model.params.num_layers, num_heads=cfg.model.params.num_heads,
-                        max_sequence_length=cfg.model.params.max_sequence_length, hidden_dropout=cfg.model.params.hidden_dropout, attention_dropout=cfg.model.params.attention_dropout)
-    
-        model.load_state_dict(torch.load(f"{cfg.saving.save_dir}/{cfg.saving.filename}_{cfg.dataset.name}_{seed}.pth", map_location="cpu"))
-        #model.large_test_emb = torch.nn.Embedding(1_000_000, 128)
-        model = model.to(device)
-        if sparsity > 0.0:
-            for attr in target_attributes:
-                if hasattr(model, attr):
-                    orig_layer = getattr(model, attr)
-                    setattr(model, attr, prune_embedding(orig_layer, sparsity))
-                    del orig_layer
-        
-        if q_class is not None:
-            for attr in target_attributes:
-                if hasattr(model, attr):
-                    orig_layer = getattr(model, attr)
-                    setattr(model, attr, q_class(orig_layer))
-                    del orig_layer
-        if cfg.model.type == "bert":
-            model.output_layer = TiedEmbeddingLinear(model.item_embedding).to(device)
-        torch.save(model, temp_model_file)
-        
-        del model
-        gc.collect()
-        torch.cuda.empty_cache()
-        
-        for i in range(11):
+        for _ in range(11):
             if 'model' in locals(): del model
             if 'trainer' in locals(): del trainer
             if 'orig_layer' in locals(): del orig_layer
