@@ -8,22 +8,23 @@ model:
   type: bert
   name: Bert4Rec
   params:
-    hidden_size: 256
-    num_layers: 2
+    hidden_size: 384
+    num_layers: 4
     num_heads: 8
     dropout: 0.2
-    max_sequence_length: 128
+    max_sequence_length: 50
 
 training:
-  update_steps: 10000
-  warmup_ratio: 0.1
-  batch_size: 64
-  accumulation_steps: 4
+  update_steps: 9000
+  warmup_ratio: 0.05
+  batch_size: 256
+  accumulation_steps: 1
 
 optimizer:
   name: AdamW
-  lr: 0.00025
-  weight_decay: 0.015
+  lr: 0.0002
+  weight_decay: 0.002
+
 
 scheduler:
   name: linear_with_warmup
@@ -38,6 +39,7 @@ data:
   model_type: bert
 
 evaluation:
+  interval: 1000
   metrics:
     - hit_rate
     - ndcg
