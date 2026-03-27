@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from src.models import NeuralMF
+from src.models import NeuMF
 from tqdm import tqdm
 from pathlib import Path
 import os
@@ -13,39 +13,85 @@ class RecSysTrainer:
         self.device = device
         self.scheduler = scheduler
 
-    def load_state_dict(self, path):
-        self.model.load_state_dict(torch.load(path, weights_only=True))
-        
-    def train_epoch_nmf(self, loader, num_items):
+    def train_n_steps_nmf(self, train_loader, validation_loader, cfg, save_path):
+        train_losses = []
+        val_hr = []
+        val_ndcg = []
+        eval_at = []
+
+        train_iter = iter(train_loader)
+        best_ndcg = float("-inf")
+        patience_counter = 0
+
+        self.optimizer.zero_grad()
         self.model.train()
-        total_loss = 0
+        for i in tqdm(range(cfg.training.max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=cfg.training.max_steps, leave=False):
+            try:
+                batch = next(train_iter)
+            except StopIteration:
+                train_iter = iter(train_loader)
+                batch = next(train_iter)
 
-        for batch in loader:
-            users, pos_items, _ = [b.to(self.device) for b in batch]
+            users, items, _ = [b.to(self.device) for b in batch]
+            pos_items = items[:, 0]
+            neg_items = items[:, 1:]
             batch_size = users.size(0)
+            K = neg_items.size(1)
 
-            neg_items = torch.randint(0, num_items, (batch_size,)).to(self.device)
+            pos_preds = self.model(users, pos_items)
+            neg_preds = self.model(
+                users.repeat_interleave(K),
+                neg_items.reshape(-1)
+            ).view(batch_size, K)
 
-            all_users = torch.cat([users, users], dim=0)
-            all_items = torch.cat([pos_items, neg_items], dim=0)
+            pos_labels = torch.ones_like(pos_preds)
+            neg_labels = torch.zeros(batch_size * K, device=self.device)
             
-            pos_labels = torch.ones(batch_size).to(self.device)
-            neg_labels = torch.zeros(batch_size).to(self.device)
-            all_labels = torch.cat([pos_labels, neg_labels], dim=0)
-
-            self.optimizer.zero_grad()
-            preds = self.model(all_users, all_items)
+            preds = torch.cat([pos_preds, neg_preds.reshape(-1)])
+            labels = torch.cat([pos_labels, neg_labels])
             
-            loss = self.criterion(preds.squeeze(), all_labels.squeeze())
-            
+            loss = self.criterion(preds, labels)
+            loss / cfg.training.accumulation_steps
             loss.backward()
+            if cfg.training.get("max_norm", None) is not None:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.training.max_norm)
+
+            if (i + 1) % cfg.training.accumulation_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                if self.scheduler:
+                    self.scheduler.step()
+
+            train_losses.append(loss.item())
+
+            if (i + 1) % (cfg.evaluation.interval * cfg.training.accumulation_steps) == 0 or (i+1) == cfg.training.max_steps:
+                hr, ndcg = self.evaluate(loader=validation_loader)
+
+                if ndcg > best_ndcg and i > cfg.training.max_steps * cfg.training.get("warmup_ratio", 0):
+                    best_ndcg = ndcg
+                    torch.save(self.model.state_dict(), f"{save_path}.pth")
+                    patience_counter = 0
+                elif i > cfg.training.max_steps * cfg.training.get("warmup_ratio", 0):
+                    patience_counter += 1
+
+                val_hr.append(hr)
+                val_ndcg.append(ndcg)
+                eval_at.append(i + 1)
+
+                self.model.train()
+
+                if patience_counter >= cfg.training.early_stopping_patience:
+                    print(f"Early stopping at step {i + 1}")
+                    break
+        
+        if cfg.training.max_steps % cfg.training.accumulation_steps != 0:
             self.optimizer.step()
-            
-            total_loss += loss.item()
-            
-        return total_loss / len(loader)
-    
-    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=10000, k=10, save_path="bert"):
+            self.optimizer.zero_grad()
+            if self.scheduler:
+                self.scheduler.step()
+        return train_losses, val_hr, val_ndcg, eval_at
+
+    def train_n_steps_bert(self, train_loader, validation_loader, accumulation_steps, max_steps, validation_interval=1000, k=10, save_path="bert", cfg=None):
         self.model.train()
         train_losses = []
         val_hr = []
@@ -53,7 +99,9 @@ class RecSysTrainer:
         eval_at = []
         train_iter = iter(train_loader)
         best_ndcg = float("-inf")
-        for i in tqdm(range(max_steps), desc="Training", total=max_steps):
+        patience_counter = 0
+        self.optimizer.zero_grad()
+        for i in tqdm(range(max_steps), desc=f"{cfg.model.type} on {cfg.dataset.name}", total=max_steps, leave=False):
             try:
                 batch = next(train_iter)
             except StopIteration:
@@ -64,7 +112,9 @@ class RecSysTrainer:
 
             logits = self.model(tokens)
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
-            
+            #-----------_Added---------------
+            loss = loss.sum() / (labels != 0).sum()
+            #-------------End Added---------------
             loss = loss/accumulation_steps
             loss.backward()
             if (i + 1) % accumulation_steps == 0:
@@ -75,17 +125,22 @@ class RecSysTrainer:
             
             train_losses.append(loss.item() * accumulation_steps)
 
-            if (i + 1) % validation_interval == 0:
-                print("eval")
+            if (i + 1) % (cfg.evaluation.interval * accumulation_steps) == 0 or (i+1) == cfg.training.max_steps:
                 hr, ndcg = self.evaluate(loader=validation_loader)
-                print("eval done")
-                if ndcg > best_ndcg:
+                if ndcg > best_ndcg and i > cfg.training.max_steps * cfg.training.get("warmup_ratio", 0):
                     best_ndcg = ndcg
                     torch.save(self.model.state_dict(), f"{save_path}.pth")
+                    patience_counter = 0
+                elif i > cfg.training.max_steps * cfg.training.get("warmup_ratio", 0):
+                    patience_counter += 1
+
                 val_hr.append(hr)
                 val_ndcg.append(ndcg)
                 eval_at.append(i+1)
                 self.model.train()
+                if patience_counter >= cfg.training.early_stopping_patience:
+                    print(f"Early stopping at step {i + 1} (no improvement for {cfg.training.early_stopping_patience} evaluations)")
+                    break
 
         if max_steps % accumulation_steps != 0:
             self.optimizer.step()
@@ -98,15 +153,14 @@ class RecSysTrainer:
         if performance_per_user:
             user_hr = {}
             user_ndcg = {}
-        if isinstance(self.model, NeuralMF):
+        if isinstance(self.model, NeuMF):
             self.model.eval()
             ndcg_list = []
             hr_list = []
 
             with torch.no_grad():
-                for batch in loader:
-                    users, items, labels = [b.to(self.device) for b in batch]
-                
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
+                    users, items, _ = [b.to(self.device) for b in batch]
                     if items.dim() == 1:
                         items = items.unsqueeze(1)
                     
@@ -118,13 +172,17 @@ class RecSysTrainer:
                     items_flat = items.reshape(-1)
 
                     scores = self.model(users_flat, items_flat)
+                    scores = scores + torch.randn_like(scores) * 1e-6
                     scores = scores.view(batch_size, num_candidate_items)
 
                     _, indices = torch.topk(scores, k=current_k, dim=1)
 
                     for i in range(batch_size):
                         user_id = users[i].item()
-                        if 0 in indices[i]: 
+                        #--------------Changed-------------
+                        #if 0 in indices[i]: 
+                        if (indices[i] == 0).any():
+                            #-----------___End changed_---------------
                             hr = 1.0
                             rank = (indices[i] == 0).nonzero(as_tuple=True)[0].item()
                             ndcg = 1.0 / np.log2(rank + 2)
@@ -146,7 +204,7 @@ class RecSysTrainer:
             ndcg_list = []
 
             with torch.no_grad():
-                for batch in tqdm(loader, desc="Validating", total=len(loader)):
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
                     seq, items, users = [b.to(self.device) for b in batch]
 
                     batch_size, num_candidates = items.shape
@@ -156,6 +214,7 @@ class RecSysTrainer:
                     scores_full = logits[:, -1, :]
 
                     scores = scores_full.gather(1, items)
+                    scores = scores + torch.randn_like(scores) * 1e-6
                     _, indices = torch.topk(scores, k=current_k, dim=1)
 
                     for i in range(batch_size):
@@ -176,10 +235,24 @@ class RecSysTrainer:
             if performance_per_user:
                 return np.mean(hr_list), np.mean(ndcg_list), user_hr, user_ndcg
             return np.mean(hr_list), np.mean(ndcg_list)
-    
-    def report_model_size(self):
-        param_size = sum(p.nelement() * p.element_size() for p in self.model.parameters()) 
-        buffer_size = sum(b.nelement() * b.element_size() for b in self.model.buffers())
-        size_all_mb = (param_size + buffer_size) / 1024**2
-        print(f"Model Size: {size_all_mb:.2f} MB")
-        return size_all_mb
+
+    def measure_metrics(self, loader):
+        if isinstance(self.model, NeuMF):
+            self.model.eval()
+            with torch.no_grad():
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
+                    if hasattr(self.model, "large_test_emb"):
+                        self.model.large_test_emb(torch.randint(0, 1_000_000, (256,), device=self.device))
+                    users, items, _ = [b.to(self.device) for b in batch]
+                    if items.dim() == 1:
+                        items = items.unsqueeze(1)
+                    self.model(users.repeat_interleave(items.shape[-1]), items.reshape(-1))
+        else:
+            self.model.eval()
+            with torch.no_grad():
+                for batch in tqdm(loader, desc="Validating", total=len(loader), leave=False):
+                    if hasattr(self.model, "large_test_emb"):
+                        self.model.large_test_emb(torch.randint(0, 1_000_000, (256,), device=self.device))
+                    seq, _, _ = [b.to(self.device) for b in batch]
+                    self.model(seq)
+

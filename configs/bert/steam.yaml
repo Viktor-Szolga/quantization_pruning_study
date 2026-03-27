@@ -1,5 +1,4 @@
-seed: 42
-device: auto  # options: "auto", "cpu", "cuda"
+device: auto
 
 dataset:
   name: "steam"
@@ -9,21 +8,23 @@ model:
   name: Bert4Rec
   params:
     hidden_size: 256
-    num_layers: 2
-    num_heads: 8
-    dropout: 0.2
-    max_sequence_length: 100
+    num_layers: 3
+    num_heads: 4
+    hidden_dropout: 0.2
+    attention_dropout: 0.1
+    max_sequence_length: 20
 
 training:
-  update_steps: 5000
+  max_steps: 100000
   warmup_ratio: 0.1
-  batch_size: 64
-  accumulation_steps: 4
+  batch_size: 256
+  accumulation_steps: 1
+  early_stopping_patience: 20
 
 optimizer:
   name: AdamW
-  lr: 0.001
-  weight_decay: 0.01
+  lr: 0.0005
+  weight_decay: 0.005
 
 scheduler:
   name: linear_with_warmup
@@ -33,12 +34,8 @@ loss:
   params:
     ignore_index: 0
 
-data:
-  dataset: MovieLens
-  model_type: bert
-
 evaluation:
-  interval: 1000
+  interval: 500
   metrics:
     - hit_rate
     - ndcg

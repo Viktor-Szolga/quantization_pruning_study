@@ -1,44 +1,44 @@
-seed: 42
-device: auto  # options: "auto", "cpu", "cuda"
+  device: auto  # options: "auto", "cpu", "cuda"
 
-dataset:
-  name: "beauty"
+  dataset:
+    name: "beauty"
 
-model:
-  type: nmf
-  name: NeuralMF
-  params:
-    latent_mf: 32
-    latent_mlp: 512
-    hidden_sizes: [512, 256, 128, 64]
+  model:
+    type: nmf
+    name: NeuralMF
+    params:
+      latent_mf: 16
+      latent_mlp: 32
+      hidden_sizes: [64, 16]
+      dropout_rate: 0
 
-training:
-  epochs: 50
-  batch_size: 64  # handled inside data manager if applicable
+  training:
+    max_steps: 2500
+    num_negatives: 50
+    batch_size: 128
+    accumulation_steps: 1
+    early_stopping_patience: 20
+    max_norm: 1.0
 
-optimizer:
-  name: AdamW
-  lr: 0.0005
-  weight_decay: 0.01
+  optimizer:
+    name: AdamW
+    lr: 0.0002
+    weight_decay: 0
 
-scheduler:
-  name: null
+  scheduler:
+    name: cosineAnnealing
 
-loss:
-  name: BCELoss
+  loss:
+    name: BCELossLogits
 
-data:
-  dataset: MovieLens
-  num_users_offset: 1
-  num_items_offset: 1
+  evaluation:
+    interval: 150
+    metrics:
+      - hit_rate
+      - ndcg
 
-evaluation:
-  metrics:
-    - hit_rate
-    - ndcg
-
-saving:
-  save_best: true
-  save_dir: trained_models
-  filename: nmf_model
-  figure_dir: figures
+  saving:
+    save_best: true
+    save_dir: trained_models
+    filename: nmf_model
+    figure_dir: figures

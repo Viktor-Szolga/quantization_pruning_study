@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+"""
 import bitsandbytes as bnb
 
 class MLP(nn.Module):
@@ -96,29 +97,34 @@ class NeuralMF(nn.Module):
         score = self.sigmoid(logits)
         return score
     
-
+"""
 
 class Bert4Rec(nn.Module):
-    def __init__(self, item_num, hidden_size, num_layers, num_heads, max_sequence_length, dropout=0.1):
+    def __init__(self, item_num, hidden_size, num_layers, num_heads, max_sequence_length, hidden_dropout=0.5, attention_dropout=0.2):
         super().__init__()
         self.item_embedding = nn.Embedding(item_num + 2, hidden_size, padding_idx=0)
         self.position_embedding = nn.Embedding(max_sequence_length, hidden_size)
 
         self.layer_norm = nn.LayerNorm(hidden_size, eps=1e-12)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(hidden_dropout)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_size, nhead=num_heads, batch_first=True, dim_feedforward=hidden_size * 4, dropout=dropout, activation="gelu"
+            d_model=hidden_size, nhead=num_heads, batch_first=True, dim_feedforward=hidden_size * 4, dropout=attention_dropout, activation="gelu"
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.output_layer = nn.Linear(hidden_size, item_num + 2)
-        
+        #-------------------Changed------------------
+        #self.output_layer = nn.Linear(hidden_size, item_num + 2)
+        #self.apply(self._init_weights)
+        self.output_layer = nn.Linear(hidden_size, item_num + 2, bias=False)
         self.apply(self._init_weights)
+        self.output_layer.weight = self.item_embedding.weight
+        #------------------End Changed--------------------
         self.item_embedding.weight.data[0].fill_(0)
+        
+        
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Embedding)):
-            # Standard BERT initialization
             module.weight.data.normal_(mean=0.0, std=0.02)
             if isinstance(module, nn.Linear) and module.bias is not None:
                 module.bias.data.zero_()
@@ -136,99 +142,108 @@ class Bert4Rec(nn.Module):
         return self.output_layer(x)
 
 
-    def set_precision(self, dtype="int8"):
-        import bitsandbytes as bnb
+class NeuMF(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim_mf, latent_dim_mlp, hidden_sizes=[64, 32, 16], dropout_prob=0.5):
+        super(NeuMF, self).__init__()
+        self.embed_user_GMF = nn.Embedding(num_users, latent_dim_mf)
+        self.embed_item_GMF = nn.Embedding(num_items, latent_dim_mf)
+
+        self.embed_user_MLP = nn.Embedding(num_users, latent_dim_mlp)
+        self.embed_item_MLP = nn.Embedding(num_items, latent_dim_mlp)
         
-        W = self.item_embedding.weight.data.detach().clone().cuda()
+        input_size = latent_dim_mlp * 2
+        modules = []
+        for h_size in hidden_sizes:
+            modules.append(nn.Linear(input_size, h_size))
+            modules.append(nn.Dropout(dropout_prob))
+            modules.append(nn.ReLU())
+            input_size = h_size
+        self.mlp_network = nn.Sequential(*modules)
+
+        self.prediction_layer = nn.Linear(latent_dim_mf + hidden_sizes[-1], 1, bias=True)
+        self.sigmoid = nn.Sigmoid()
+
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.normal_(self.embed_user_GMF.weight, std=0.01)
+        nn.init.normal_(self.embed_item_GMF.weight, std=0.01)
+        nn.init.normal_(self.embed_user_MLP.weight, std=0.01)
+        nn.init.normal_(self.embed_item_MLP.weight, std=0.01)
+
+        for m in self.mlp_network:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
         
-        if dtype == "int8":
-            out_int8, state = bnb.functional.quantize_blockwise(W)
-            
-            param = bnb.nn.Int8Params(out_int8, requires_grad=False)
-            param.quant_state = state # Attach the quantization metadata
-            self.item_embedding.weight = param.to("cuda")   
-            
-        elif dtype in ["nf4", "fp4"]:
-            # 4-bit usually does this more automatically, but we ensure it here
-            from bitsandbytes.nn import Params4bit
-            param = Params4bit(W, requires_grad=False, quant_type=dtype)
-            self.item_embedding.weight = param.to("cuda")
-            
-        elif dtype == "fp16":
-            self.item_embedding.half()
+        nn.init.xavier_uniform_(self.prediction_layer.weight)
+        if self.prediction_layer.bias is not None:
+            nn.init.zeros_(self.prediction_layer.bias)
 
-        # CRITICAL: Clear cache so we can see the freed FP32 memory
-        torch.cuda.empty_cache()
+    def forward(self, user_indices, item_indices):
+        user_gmf = self.embed_user_GMF(user_indices)
+        item_gmf = self.embed_item_GMF(item_indices)
+        mf_vector = torch.mul(user_gmf, item_gmf)
 
-    def set_precision(self, dtype="int8"):
-            import bitsandbytes as bnb
-            
-            # 1. Quantize Item Embedding (Your existing logic)
-            # Note: Ideally, you should also replace nn.Embedding with bnb.nn.Embedding for stability,
-            # but we will keep your manual parameter logic here as requested.
-            W_emb = self.item_embedding.weight.data.detach().clone().cuda().half()
-            
-            if dtype == "int8":
-                out_int8, state = bnb.functional.quantize_blockwise(W_emb)
-                param = bnb.nn.Int8Params(out_int8, requires_grad=False)
-                param.quant_state = state
-                self.item_embedding.weight = param.to("cuda")
-                
-            elif dtype in ["nf4", "fp4"]:
-                from bitsandbytes.nn import Params4bit
-                param = Params4bit(W_emb, requires_grad=False, quant_type=dtype)
-                self.item_embedding.weight = param.to("cuda")
-                
-            elif dtype == "fp16":
-                self.item_embedding.half()
+        user_mlp = self.embed_user_MLP(user_indices)
+        item_mlp = self.embed_item_MLP(item_indices)
+        mlp_vector = torch.cat([user_mlp, item_mlp], dim=-1)
+        mlp_vector = self.mlp_network(mlp_vector)
 
-            # 2. Quantize Output Layer (New Logic)
-            # We must replace the entire nn.Linear module with a bnb module
-            W_out = self.output_layer.weight.data.detach().clone().cuda().half()
-            B_out = None
-            if self.output_layer.bias is not None:
-                B_out = self.output_layer.bias.data.detach().clone().cuda().half()
+        combined_vector = torch.cat([mf_vector, mlp_vector], dim=-1)
+        
+        prediction = self.prediction_layer(combined_vector)
+        return prediction.view(-1)
+    
 
-            if dtype == "int8":
-                from bitsandbytes.nn import Linear8bitLt
-                # Create the 8-bit layer
-                new_linear = Linear8bitLt(
-                    self.output_layer.in_features,
-                    self.output_layer.out_features,
-                    bias=(B_out is not None),
-                    has_fp16_weights=False, # We want pure Int8 weights
-                    threshold=6.0 
-                )
-                # Load weights and force quantization by moving to CUDA
-                new_linear.weight.data = W_out
-                if B_out is not None:
-                    new_linear.bias.data = B_out
-                
-                self.output_layer = new_linear.cuda()
 
-            elif dtype in ["nf4", "fp4"]:
-                from bitsandbytes.nn import Linear4bit
-                # Create the 4-bit layer
-                new_linear = Linear4bit(
-                    self.output_layer.in_features,
-                    self.output_layer.out_features,
-                    bias=(B_out is not None),
-                    quant_type=dtype,
-                    compute_dtype=torch.float16 # 4-bit uses fp16/bf16 for computation
-                )
-                # Load weights
-                new_linear.weight.data = W_out
-                if B_out is not None:
-                    new_linear.bias.data = B_out
-                    
-                self.output_layer = new_linear.cuda()
+"""
 
-            elif dtype == "fp16":
-                self.output_layer.half()
+class GMF(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim):
+        super().__init__()
+        self.embed_user = nn.Embedding(num_users + 1, latent_dim)
+        self.embed_item = nn.Embedding(num_items + 1, latent_dim)
+        self.prediction = nn.Linear(latent_dim, 1)
 
-            # CRITICAL: Clear cache to reclaim the FP32 memory
-            del W_emb, W_out
-            if 'B_out' in locals() and B_out is not None:
-                del B_out
-            torch.cuda.empty_cache()
+        nn.init.normal_(self.embed_user.weight, std=0.01)
+        nn.init.normal_(self.embed_item.weight, std=0.01)
+        nn.init.kaiming_uniform_(self.prediction.weight, a=1, nonlinearity='sigmoid')
 
+    def forward(self, users, items):
+        u = self.embed_user(users)
+        i = self.embed_item(items)
+        vec = u * i               # element-wise multiply
+        return self.prediction(vec).view(-1)
+    
+
+class MLP(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim, hidden_sizes=[128,64]):
+        super().__init__()
+        self.embed_user = nn.Embedding(num_users + 1, latent_dim)
+        self.embed_item = nn.Embedding(num_items + 1, latent_dim)
+
+        input_size = latent_dim * 2
+        layers = []
+        for h in hidden_sizes:
+            layers.append(nn.Linear(input_size, h))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(0.1))   # optional
+            input_size = h
+        self.mlp = nn.Sequential(*layers)
+        self.prediction = nn.Linear(hidden_sizes[-1], 1)
+
+        nn.init.normal_(self.embed_user.weight, std=0.01)
+        nn.init.normal_(self.embed_item.weight, std=0.01)
+        for m in self.mlp:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+        nn.init.kaiming_uniform_(self.prediction.weight, a=1, nonlinearity='sigmoid')
+
+    def forward(self, users, items):
+        u = self.embed_user(users)
+        i = self.embed_item(items)
+        x = torch.cat([u, i], dim=-1)
+        x = self.mlp(x)
+        return self.prediction(x).view(-1)
+
+"""
